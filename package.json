@@ -1,0 +1,42 @@
+{
+  "name": "lifeos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "apps/web",
+    "server"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "setup:google": "node scripts/setup-google.mjs",
+    "setup:api": "node scripts/setup-api.mjs",
+    "api:check": "node scripts/setup-api.mjs --check",
+    "dev": "concurrently --kill-others -n API,WEB -c cyan,magenta \"npm run dev -w server\" \"npm run dev -w apps/web\"",
+    "dev:api": "npm run dev -w server",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:mobile": "cd apps/mobile && flutter run --dart-define-from-file=config/development.json",
+    "build:android": "npm run api:check && cd apps/mobile && flutter build apk --release --dart-define-from-file=config/production.json",
+    "ai:check": "node scripts/check-local-ai.mjs",
+    "db:up": "docker compose up -d mongo",
+    "db:down": "docker compose stop mongo",
+    "seed": "npm run seed -w server",
+    "test": "node --test scripts/test/*.test.mjs && npm run test --workspaces --if-present",
+    "test:integration": "npm run test:integration -w server",
+    "build": "npm run build -w apps/web",
+    "lint": "eslint apps/web server scripts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.0.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^17.0.0",
+    "prettier": "^3.9.9"
+  }
+}

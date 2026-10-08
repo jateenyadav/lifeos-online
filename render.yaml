@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: lifeos-api
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm ci --omit=dev --workspace server
+    startCommand: npm start --workspace server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: WEB_ORIGINS
+        value: ''
+      - key: GOOGLE_CLIENT_IDS
+        value: ''
+      - key: SESSION_DAYS
+        value: '7'
+      - key: COOKIE_SAME_SITE
+        value: lax
+      - key: TRUST_PROXY_HOPS
+        value: '1'

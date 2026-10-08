@@ -1,0 +1,150 @@
+.ai-intro,
+.ai-card {
+  border: 1px solid #e2e8db;
+  border-radius: 16px;
+  background: #fffefa;
+  padding: 24px;
+}
+.ai-intro {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  background: #edf2e6;
+}
+.ai-intro svg {
+  flex-shrink: 0;
+  color: #304f40;
+}
+.ai-intro p {
+  margin: 0;
+  line-height: 1.7;
+  font-size: 13px;
+}
+.ai-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.ai-card h2 {
+  margin-top: 0;
+  font-size: 20px;
+}
+.ai-card > p,
+.ai-status,
+.ai-footnote {
+  font-size: 13px;
+  color: #65715d;
+  line-height: 1.7;
+}
+.ai-controls {
+  display: grid;
+  gap: 18px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.ai-controls input:not([type='checkbox']),
+.ai-controls select,
+.ai-controls textarea {
+  width: 100%;
+}
+.ai-controls textarea {
+  resize: vertical;
+}
+.ai-controls input[type='file'] {
+  font-size: 12px;
+  padding: 8px;
+}
+.ai-topics {
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+.ai-topics label,
+.ai-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ai-warning {
+  padding: 14px;
+  margin: 0;
+  border-radius: 10px;
+  background: #fff2dc;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #705124;
+}
+.ai-examples {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.ai-examples button {
+  background: #f3f5ed;
+  border: 1px solid #e2e8db;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 11px;
+  color: #304f40;
+  cursor: pointer;
+}
+.ai-chat {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0 16px;
+}
+.ai-message {
+  border-radius: 12px;
+  padding: 16px;
+  background: #f3f5ed;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.ai-message.user {
+  background: #e6eedd;
+}
+.ai-message p,
+.ai-documents details p {
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.ai-message summary,
+.ai-documents summary {
+  cursor: pointer;
+  color: #304f40;
+  font-size: 12px;
+}
+.ai-documents {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+.ai-documents article {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  border-top: 1px solid #e2e8db;
+  padding-top: 16px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.ai-documents small {
+  display: block;
+  margin-top: 5px;
+  color: #65715d;
+}
+.ai-documents details {
+  grid-column: 1 / -1;
+}
+@media (max-width: 1050px) {
+  .ai-layout {
+    grid-template-columns: 1fr;
+  }
+}

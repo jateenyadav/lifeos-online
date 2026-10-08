@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="payment_review_title">LifeOS · Check payment\n%1$s · %2$s</string>
+    <string name="payment_review_question">Amount correct? Spending, self transfer or money with someone?</string>
+    <string name="payment_review_open">Review in LifeOS</string>
+    <string name="payment_review_later">Later</string>
+</resources>
