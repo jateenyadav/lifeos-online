@@ -11,13 +11,15 @@ Do not switch hosting providers or create paid resources.
 - Done: after 5 seconds, the login screen says **Waking up the server, this can take up to a minute**. Tests cover all four actions and the timeout.
 - Done: local `.env` files, mobile settings, signing keys, build files, and APKs are excluded from Git. Only `.env.example` templates are selected.
 - Done: checked the selected text files for private keys, known API token formats, and MongoDB passwords. None were found.
-- Done: JavaScript lint, web build, 34 backend/setup tests, 33 mobile login tests, and Flutter analysis pass.
-- In progress: publishing a NEW PRIVATE repository, `jateenyadav/lifeos-online`, on branch `main`.
+- Done: JavaScript lint, web build, all 118 JavaScript tests, all 74 Flutter tests, and Flutter analysis pass. Formatting checks pass for the changed JavaScript, YAML, Markdown, and Dart files.
+- Done: `npm run setup:google -- --check` reports matching local Web, backend, Android, and iOS client IDs. This does not prove that the Google console or real phone is configured.
+- Done: created and pushed the NEW PRIVATE repository `jateenyadav/lifeos-online`, on branch `main`. GitHub reports `isPrivate: true`. Local `origin` points to this repository.
 - Important: the existing `jateenyadav/LifeOS` GitHub repository is PUBLIC. Do not push this deployment to it. It was left unchanged.
 - Blocked: the Render plugin is available but is not connected in this chat. No Render service was created by this chat.
 - Your action: enable the Render connection, or use the exact Render dashboard steps below.
 - Your action: create Atlas Free, its database user, and the `0.0.0.0/0` access rule. Paste the database link into Render yourself, never into chat.
-- Waiting: the live Render address, the real online health check, and the new release APK.
+- Blocked as expected: `npm run api:check` reports **No online backend is configured**. `npm run build:android` stops at that same safety check. No release APK was produced. This is not a Flutter compiler error.
+- Waiting: `npm run setup:api` needs the live Render address. Do not run it with a placeholder. Then rerun `npm run api:check` and `npm run build:android`.
 - Waiting: real-phone tests on mobile data, including native Google sign-in.
 
 The local mobile development settings have a Google Web client ID, but no API address.
@@ -97,7 +99,7 @@ Connecting GitHub to this chat does not connect GitHub to Render.
 6. Set **Blueprint Name** to `LifeOS Online`.
 7. Set **Branch** to `main` and **Blueprint Path** to `render.yaml`.
 8. Check that the preview contains one **Web Service**, named `lifeos-api`, with plan **Free** and region **Singapore**.
-9. If Render asks for `MONGODB_URI` now, leave this page open. Create Atlas in another tab using section 4. Paste the private link into Render, not chat.
+9. Render asks for `MONGODB_URI` and `GOOGLE_CLIENT_IDS`. Leave this page open. Create Atlas in another tab using section 4. Paste the private database link into Render, not chat. For the Google field, copy `GOOGLE_WEB_CLIENT_ID` from `apps/mobile/config/development.json`, as described in section 5.
 10. Click **Deploy Blueprint** only after the database value is entered and the plan is still **Free**.
 
 Do not add Render Postgres, a disk, a paid instance, or a paid workspace upgrade.
@@ -245,8 +247,29 @@ The existing local development settings already have one. Preserve it.
 7. Follow `docs/GOOGLE_AUTH.md` for the exact Google console clicks and signing-key command.
 
 The current release build uses the debug signing key. Register that key for phone testing.
+The current Mac's debug certificate SHA-1 is:
+
+```text
+14:A2:9C:E7:AD:CA:F3:34:8A:3D:88:74:5F:3D:AC:D8:C8:D0:E1:C5
+```
+
+To register that certificate in the existing Google project:
+
+1. Open **Google Auth Platform**, then **Clients**.
+2. Open the existing Android client if it already uses this package and SHA-1. Do not create a duplicate.
+3. If it does not exist, click **Create client**.
+4. Select **Application type**, then **Android**.
+5. Set **Name** to `LifeOS Android Test`.
+6. Set **Package name** to `com.lifeos.lifeos_mobile`.
+7. Paste the SHA-1 above into **SHA-1 certificate fingerprint**.
+8. Click **Create**.
+
+The Android client ID does not go into Render or the Flutter JSON settings.
+Keep the existing Web client ID in `GOOGLE_CLIENT_IDS` on Render and `GOOGLE_WEB_CLIENT_ID` in the app settings.
+The SHA-1 is a public fingerprint, not a password. Recheck it if you replace the debug keystore or build on another computer.
 If Google's project is in Testing, add your Google account under **Audience**, then **Test users**, then **Add users**.
 A Google client secret is NOT needed for this implementation.
+The blueprint marks the database link and Google client IDs as `sync: false`. Later blueprint changes will not replace these dashboard values.
 Try a different Google email from the email used for password sign-up.
 LifeOS does not silently join an existing password account to a Google account.
 
@@ -334,6 +357,12 @@ The phone can use the hosted server without your laptop being on.
 
 ## 8. Error fixes
 
+**No online backend is configured**
+
+Meaning: no verified online address has been saved for release builds.
+Why: Render is not live yet, or `npm run setup:api` has not finished successfully.
+Fix: finish the Render and Atlas steps. Run `npm run setup:api`, paste the public Render address into the terminal prompt, then run `npm run api:check` and `npm run build:android`.
+
 **Cannot reach an Android emulator address**
 
 Meaning: the installed app still points at `10.0.2.2`.
@@ -356,6 +385,10 @@ Fix: tap **New here? Create account**, or migrate your existing database private
 
 - [Render blueprint configuration](https://render.com/docs/blueprint-spec)
 - [Render free hosting behavior](https://render.com/docs/free)
+- [Render environment variables](https://render.com/docs/configure-environment-variables)
+- [Create an Atlas Free cluster](https://www.mongodb.com/docs/atlas/tutorial/deploy-free-tier-cluster/)
+- [Atlas database users](https://www.mongodb.com/docs/atlas/security-add-mongodb-users/)
+- [Atlas IP access list](https://www.mongodb.com/docs/atlas/security/ip-access-list/)
 - [Connect MongoDB Atlas to Render](https://www.mongodb.com/docs/atlas/reference/partner-integrations/render/)
 
 These describe hosting setup. They do not mean this project is already deployed.

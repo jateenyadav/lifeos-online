@@ -17,7 +17,7 @@ services:
       - key: WEB_ORIGINS
         value: ''
       - key: GOOGLE_CLIENT_IDS
-        value: ''
+        sync: false
       - key: SESSION_DAYS
         value: '7'
       - key: COOKIE_SAME_SITE

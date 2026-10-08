@@ -451,6 +451,13 @@ test('config validates origins and secure production requirements', () => {
     WEB_ORIGINS: 'http://localhost:5173',
   };
   assert.equal(readConfig(environment).port, 4000);
+  const hosted = readConfig({
+    ...environment,
+    PORT: '10000',
+    MONGODB_URI: 'mongodb+srv://cluster.example/lifeos',
+  });
+  assert.equal(hosted.port, 10000);
+  assert.equal(hosted.mongoUri, 'mongodb+srv://cluster.example/lifeos');
   assert.throws(() => readConfig({ ...environment, WEB_ORIGINS: '*' }));
   assert.throws(() => readConfig({ ...environment, NODE_ENV: 'production' }));
   assert.throws(() => readConfig({ ...environment, COOKIE_SAME_SITE: 'none' }));
