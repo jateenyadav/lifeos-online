@@ -19,6 +19,15 @@ const loginSchema = z.object({
     ),
 });
 const googleSchema = z.object({ idToken: z.string().min(1).max(10000) });
+const accountDeletionSchema = z
+  .object({
+    confirmation: z.literal('DELETE', {
+      error: 'Type DELETE to confirm account deletion.',
+    }),
+    password: loginSchema.shape.password.optional(),
+    idToken: googleSchema.shape.idToken.optional(),
+  })
+  .strict();
 const registerSchema = z
   .object({
     name: z
@@ -53,6 +62,7 @@ export function createApp({
   workspaces,
   aiKnowledge,
   aiProviders,
+  deleteAccountData,
   isDatabaseReady = () => true,
 }) {
   const app = express();
@@ -176,6 +186,21 @@ export function createApp({
   });
   app.post('/api/auth/logout', async (request, response) => {
     await auth.logout(tokenFrom(request));
+    response.clearCookie(cookieName, cookieOptions);
+    response.status(204).end();
+  });
+  app.delete('/api/auth/account', loginLimiter, async (request, response) => {
+    const values = accountDeletionSchema.parse(request.body);
+    const userId = await auth.confirmAccountDeletion(
+      tokenFrom(request),
+      values,
+    );
+    if (!deleteAccountData)
+      throw new ApiError(
+        503,
+        'Account deletion is not available yet. Restart the updated backend.',
+      );
+    await deleteAccountData(userId);
     response.clearCookie(cookieName, cookieOptions);
     response.status(204).end();
   });

@@ -10,6 +10,7 @@ Development base: `http://localhost:4000/api`. Flutter appends endpoint paths to
 - `POST /auth/google`: verify a Google ID token and sign in.
 - `GET /auth/me`: return the current user.
 - `POST /auth/logout`: revoke this session and clear the cookie.
+- `DELETE /auth/account`: permanently delete this account, all its sessions, daily spaces, money records, and saved AI knowledge after identity confirmation.
 - `GET /workspaces`: load this account's daily spaces.
 - `POST`, `PATCH`, and `DELETE /workspaces/...`: create, update, and remove owned entries. See [the workspace guide](WORKSPACES.md) for the routes and fields.
 - `POST /workspaces/money/notifications`: queue a parsed INR payment for review. The current Android reader uses this route.
@@ -87,6 +88,28 @@ Identifiers are trimmed and lowercased. Passwords are not trimmed. Passwords lon
 ```
 
 The backend verifies the actual token. Sending a name, email or Google user ID alone cannot authenticate a user.
+
+### Account deletion request
+
+Send a valid session cookie or mobile Bearer token.
+Password accounts send:
+
+```json
+{ "confirmation": "DELETE", "password": "YOUR_PASSWORD" }
+```
+
+Google accounts send:
+
+```json
+{ "confirmation": "DELETE", "idToken": "FRESH_TOKEN_RETURNED_BY_GOOGLE" }
+```
+
+The verified Google identity must match the signed-in account.
+The server chooses the account from the session. Caller-supplied account IDs are rejected.
+Success returns `204`, clears the browser cookie, and revokes every session for that account.
+Cleanup uses a database transaction. If any storage operation fails, deletion is rolled back.
+This endpoint requires MongoDB with transaction support, such as Atlas or a local replica set.
+See [Account deletion](ACCOUNT_DELETION.md) for the mobile confirmation and deployment limits.
 
 ### Website response
 

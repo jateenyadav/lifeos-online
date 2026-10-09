@@ -16,6 +16,7 @@ The cloud deployment still needs your hosting account and private code repositor
 
 This milestone includes email/password registration, ID/email + password login, Google sign-in, independent daily workspaces, session restoration, and logout.
 The same account works on web, Android, and iOS.
+Mobile users can permanently delete their LifeOS account after confirming their password or Google identity. See [Account deletion](docs/ACCOUNT_DELETION.md).
 There is no email verification, password-reset flow, or account-linking flow yet.
 The small card on the website's left side is decorative.
 

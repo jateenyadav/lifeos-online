@@ -162,6 +162,44 @@ class AuthController extends ChangeNotifier {
     }
   });
 
+  Future<void> deleteAccount({String? password}) => _perform(() async {
+    final token = _token;
+    final currentAccount = account;
+    if (token == null || currentAccount == null) {
+      throw const ApiException('Please sign in again.', status: 401);
+    }
+    String? idToken;
+    if (currentAccount.provider == 'google') {
+      idToken = await google.signIn();
+      if (idToken == null) return;
+    }
+    await _withServerWait(
+      () => api.deleteAccount(
+        token,
+        password: currentAccount.provider == 'google' ? null : password,
+        idToken: idToken,
+      ),
+    );
+    _token = null;
+    account = null;
+    var cleanupFailed = false;
+    for (final cleanup in <Future<void> Function()>[
+      () => notifications.clearAccount(baseUrl: api.baseUrl),
+      tokenStore.delete,
+      google.signOut,
+    ]) {
+      try {
+        await cleanup();
+      } catch (_) {
+        cleanupFailed = true;
+      }
+    }
+    if (cleanupFailed) {
+      error =
+          'Your LifeOS account was deleted, but this phone could not clear all local settings. Clear LifeOS app data in your phone settings.';
+    }
+  });
+
   Future<Map<String, dynamic>> workspaceRequest(
     String path, {
     String method = 'GET',
@@ -183,6 +221,11 @@ class AuthController extends ChangeNotifier {
   ) async {
     if (_token == null) {
       throw const ApiException('Please sign in again.', status: 401);
+    }
+    if (busy) {
+      throw const ApiException(
+        'Please wait for your account request to finish.',
+      );
     }
     final token = _token!;
     try {

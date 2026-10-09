@@ -72,6 +72,19 @@ export function createAuthService({
     return { token, expiresAt, user: publicUser(user) };
   }
 
+  async function currentAccount(token) {
+    if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token))
+      throw new ApiError(401, 'Please sign in to continue.');
+    const session = await sessions.findActive(hashToken(token), new Date());
+    const user = session && (await users.findById(session.userId));
+    if (!user)
+      throw new ApiError(
+        401,
+        'Your session has expired. Please sign in again.',
+      );
+    return { user, expiresAt: session.expiresAt };
+  }
+
   return {
     async register(name, email, password) {
       const normalizedEmail = email.trim().toLowerCase();
@@ -130,16 +143,42 @@ export function createAuthService({
       return newSession(user);
     },
     async current(token) {
-      if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token))
-        throw new ApiError(401, 'Please sign in to continue.');
-      const session = await sessions.findActive(hashToken(token), new Date());
-      const user = session && (await users.findById(session.userId));
-      if (!user)
-        throw new ApiError(
-          401,
-          'Your session has expired. Please sign in again.',
+      const { user, expiresAt } = await currentAccount(token);
+      return { user: publicUser(user), expiresAt };
+    },
+    async confirmAccountDeletion(token, { password, idToken }) {
+      const { user } = await currentAccount(token);
+      if (user.googleId) {
+        if (!idToken)
+          throw new ApiError(400, 'Confirm deletion with your Google account.');
+        const profile = await verifyGoogle(idToken);
+        if (profile.googleId !== user.googleId)
+          throw new ApiError(
+            403,
+            'Choose the Google account used to sign in to LifeOS.',
+          );
+      } else {
+        if (!password)
+          throw new ApiError(
+            400,
+            'Enter your password to delete your account.',
+          );
+        const storedUser = await users.findByIdentifier(user.email);
+        const matches = await bcrypt.compare(
+          password,
+          storedUser?.passwordHash || (await dummyHash),
         );
-      return { user: publicUser(user), expiresAt: session.expiresAt };
+        if (
+          !storedUser?.passwordHash ||
+          String(storedUser._id) !== String(user._id) ||
+          !matches
+        )
+          throw new ApiError(
+            401,
+            'Incorrect password. Your account was not deleted.',
+          );
+      }
+      return String(user._id);
     },
     async logout(token) {
       if (token) await sessions.remove(hashToken(token));

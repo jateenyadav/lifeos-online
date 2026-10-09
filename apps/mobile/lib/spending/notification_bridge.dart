@@ -71,6 +71,13 @@ class NotificationBridge {
     });
   }
 
+  Future<void> clearAccount({required String baseUrl}) async {
+    await configure(baseUrl: baseUrl);
+    if (_error != null) {
+      throw PlatformException(code: 'account_cleanup_failed', message: _error);
+    }
+  }
+
   Future<NotificationStatus> status() async {
     final values = await _invoke('status');
     if (values is Map) return NotificationStatus.fromMap(values);

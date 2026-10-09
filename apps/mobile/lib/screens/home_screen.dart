@@ -8,6 +8,7 @@ import '../workspaces/workouts_space.dart';
 import '../workspaces/routines_space.dart';
 import '../workspaces/spending_space.dart';
 import '../workspaces/personal_ai_space.dart';
+import 'delete_account_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.controller});
@@ -40,7 +41,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _refreshPayments() {
-    if (mounted && !_store.loading && !_store.saving) _store.load();
+    if (mounted &&
+        !widget.controller.busy &&
+        !_store.loading &&
+        !_store.saving) {
+      _store.load();
+    }
   }
 
   @override
@@ -67,10 +73,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _deleteAccount() async {
+    if (widget.controller.busy) return;
+    if (_store.saving) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Wait for your current save to finish.')),
+      );
+      return;
+    }
+    final account = widget.controller.account;
+    if (account == null) return;
+    final password = await showDialog<String>(
+      context: context,
+      builder: (_) => DeleteAccountDialog(account: account),
+    );
+    if (!mounted ||
+        password == null ||
+        widget.controller.account?.id != account.id) {
+      return;
+    }
+    await widget.controller.deleteAccount(
+      password: account.provider == 'google' ? null : password,
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       backgroundColor: const Color(0xFFFAFBF7),
+      bottom: widget.controller.busy
+          ? const PreferredSize(
+              preferredSize: Size.fromHeight(3),
+              child: LinearProgressIndicator(),
+            )
+          : null,
       title: const Row(
         children: [
           Icon(Icons.eco_outlined, color: Color(0xFF304F40)),
@@ -88,21 +124,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           animation: _store,
           builder: (context, _) => IconButton(
             tooltip: 'Refresh saved spaces',
-            onPressed: _store.loading || _store.saving ? null : _store.load,
+            onPressed: widget.controller.busy || _store.loading || _store.saving
+                ? null
+                : _store.load,
             icon: const Icon(Icons.refresh, color: muted),
           ),
         ),
         IconButton(
-          tooltip: widget.controller.busy ? 'Signing out…' : 'Sign out',
+          tooltip: widget.controller.busy ? 'Please wait…' : 'Sign out',
           onPressed: widget.controller.busy ? null : widget.controller.logout,
           icon: const Icon(Icons.logout, color: muted),
+        ),
+        PopupMenuButton<String>(
+          tooltip: 'Account options',
+          enabled: !widget.controller.busy,
+          onSelected: (action) {
+            if (action == 'delete') _deleteAccount();
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'delete', child: Text('Delete account')),
+          ],
         ),
       ],
     ),
     bottomNavigationBar: NavigationBar(
       selectedIndex: _selected,
       labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-      onDestinationSelected: (index) => _open(index, false),
+      onDestinationSelected: widget.controller.busy
+          ? null
+          : (index) => _open(index, false),
       backgroundColor: const Color(0xFFFFFEFA),
       indicatorColor: const Color(0xFFE4ECDA),
       destinations: const [

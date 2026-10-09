@@ -56,6 +56,26 @@ Registration signs you in and saves your session in secure storage.
 Sign out and use the same email and password on web, Android, or iOS.
 See `../../docs/EMAIL_AUTH.md` for the full beginner guide.
 
+To delete a LifeOS account, open the top-right **Account options** menu and choose **Delete account**.
+Type `DELETE` and confirm with your password or the same Google account.
+This deletes saved LifeOS data and signs out every device. It does not delete your Google account.
+The updated backend must be deployed before the installed app can use this action.
+See `../../docs/ACCOUNT_DELETION.md` for the data cleanup and test commands.
+
 An empty `API_BASE_URL` selects `http://10.0.2.2:4000/api` for the Android emulator or `http://127.0.0.1:4000/api` for the iOS simulator. A real phone needs your computer's LAN address instead.
 
 Release builds require an HTTPS `API_BASE_URL`, real OAuth client IDs, your own signing configuration, and completed native Google setup. Local HTTP permissions are debug-only.
+
+Android release signing reads `android/key.properties`.
+Set `storePassword`, `keyPassword`, `keyAlias`, and `storeFile` in that local file.
+`storeFile` is the absolute path to your upload keystore.
+Release builds use this upload key, not the development key.
+Keep the settings file, keystore, and passwords private. The signing files are excluded from Git.
+
+To build a Google Play upload bundle, run this from `apps/mobile`:
+
+```sh
+flutter build appbundle --release --dart-define-from-file=config/production.json
+```
+
+The bundle is saved to `build/app/outputs/bundle/release/app-release.aab`.

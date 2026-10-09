@@ -5,6 +5,7 @@ import { createGoogleVerifier } from './auth.js';
 import { createApp } from './app.js';
 import { workspaceModels, mongoWorkspaces } from './workspace-models.js';
 import { AiKnowledge, mongoAiKnowledge } from './ai-models.js';
+import { createAccountDeletion } from './account-deletion.js';
 
 const config = readConfig();
 await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 10000 });
@@ -19,6 +20,7 @@ const app = createApp({
   sessions: mongoSessions,
   workspaces: mongoWorkspaces,
   aiKnowledge: mongoAiKnowledge,
+  deleteAccountData: createAccountDeletion(),
   verifyGoogle: createGoogleVerifier(config.googleClientIds),
   isDatabaseReady: async () => {
     if (mongoose.connection.readyState !== 1) return false;

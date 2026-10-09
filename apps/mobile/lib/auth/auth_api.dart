@@ -10,14 +10,21 @@ class ApiException implements Exception {
 }
 
 class Account {
-  const Account({required this.id, required this.name, required this.email});
+  const Account({
+    required this.id,
+    required this.name,
+    required this.email,
+    this.provider = 'password',
+  });
   final String id;
   final String name;
   final String email;
+  final String provider;
   factory Account.fromJson(Map<String, dynamic> json) => Account(
     id: json['id'] as String,
     name: json['name'] as String,
     email: json['email'] as String,
+    provider: json['provider'] as String? ?? 'password',
   );
 }
 
@@ -181,6 +188,24 @@ class AuthApi {
 
   Future<void> logout(String token) async {
     await _request('/auth/logout', method: 'POST', token: token);
+  }
+
+  Future<void> deleteAccount(
+    String token, {
+    String? password,
+    String? idToken,
+  }) async {
+    await _request(
+      '/auth/account',
+      method: 'DELETE',
+      token: token,
+      body: {
+        'confirmation': 'DELETE',
+        'password': ?password,
+        'idToken': ?idToken,
+      },
+      timeout: loginTimeout,
+    );
   }
 
   void close() => _client.close();
