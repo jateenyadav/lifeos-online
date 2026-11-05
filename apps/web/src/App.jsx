@@ -126,6 +126,44 @@ function StoryPanel() {
   );
 }
 
+// The free hosted backend sleeps when idle and can take up to a minute to wake.
+// A proxy in front of it may give up first with a gateway error (502/503/504),
+// so the session check keeps retrying those until the server answers.
+const WAKE_NOTICE_MS = 5000;
+const WAKE_RETRY_MS = 3000;
+const WAKE_LIMIT_MS = 90000;
+const GATEWAY_ERRORS = new Set([502, 503, 504]);
+
+const pause = (ms, signal) =>
+  new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+
+async function restoreSession(signal) {
+  const started = Date.now();
+  for (;;) {
+    try {
+      return await apiRequest('/auth/me', { signal });
+    } catch (failure) {
+      if (
+        signal.aborted ||
+        !GATEWAY_ERRORS.has(failure.status) ||
+        Date.now() - started >= WAKE_LIMIT_MS
+      )
+        throw failure;
+      await pause(WAKE_RETRY_MS, signal);
+    }
+  }
+}
+
 export default function App() {
   const contentRef = useRef(null);
   const errorRef = useRef(null);
@@ -139,14 +177,25 @@ export default function App() {
   const [registering, setRegistering] = useState(false);
   const [name, setName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [waking, setWaking] = useState(false);
 
   useEffect(() => {
     if (error) errorRef.current?.scrollIntoView?.({ block: 'nearest' });
   }, [error]);
 
+  const waiting = restoring || busy;
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setTimeout(() => setWaking(true), WAKE_NOTICE_MS);
+    return () => {
+      clearTimeout(timer);
+      setWaking(false);
+    };
+  }, [waiting]);
+
   useEffect(() => {
     const controller = new AbortController();
-    apiRequest('/auth/me', { signal: controller.signal })
+    restoreSession(controller.signal)
       .then((result) => {
         if (!controller.signal.aborted) setUser(result.user);
       })
@@ -283,9 +332,11 @@ export default function App() {
                   {error}
                 </div>
               )}
-              {restoring && (
+              {waiting && (restoring || waking) && (
                 <p className="session-note" role="status">
-                  Checking your session…
+                  {waking
+                    ? 'Waking up the server, this can take up to a minute…'
+                    : 'Checking your session…'}
                 </p>
               )}
               <>

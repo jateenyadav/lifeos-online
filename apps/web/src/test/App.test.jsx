@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App.jsx';
 
@@ -231,6 +231,51 @@ test('shows an actionable error if the server is offline', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Cannot reach the server',
   );
+});
+
+test('keeps checking the session while a sleeping server wakes up', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    fetch
+      .mockResolvedValueOnce(new Response('Gateway Timeout', { status: 504 }))
+      .mockResolvedValueOnce(new Response('Bad Gateway', { status: 502 }))
+      .mockResolvedValueOnce(jsonResponse({ user }));
+    render(<App />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Checking your session',
+    );
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Waking up the server',
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    expect(
+      await screen.findByRole('heading', { name: 'Hello, LifeOS.' }),
+    ).toBeInTheDocument();
+    expect(
+      fetch.mock.calls.filter(([path]) => path === '/api/auth/me'),
+    ).toHaveLength(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('stops waiting for the server after the wake-up limit', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    fetch.mockImplementation(() =>
+      Promise.resolve(new Response('Gateway Timeout', { status: 504 })),
+    );
+    render(<App />);
+    await act(() => vi.advanceTimersByTimeAsync(93000));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The server could not complete your request.',
+    );
+    expect(screen.getByLabelText('Your ID or email')).toBeEnabled();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test('sends the Google identity token to the backend and signs out', async () => {
