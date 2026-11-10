@@ -2,6 +2,12 @@
 
 A Flutter mobile app for **Android and iOS**, a matching **React website**, and **one Express backend connected to one MongoDB database**.
 
+**Live website:** https://lifeos-jateen.netlify.app
+
+[![LifeOS demo: sign in, Today, notes, workouts, spending and routines](docs/demo.gif)](docs/demo.mp4)
+
+▶ [Watch the full 20-second demo with sound](docs/demo.mp4)
+
 ## Real Android phone: login on Wi-Fi or mobile data
 
 `10.0.2.2` only connects an Android emulator to your computer.
