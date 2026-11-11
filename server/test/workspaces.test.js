@@ -753,3 +753,15 @@ test('workspace polling returns 304 when nothing changed, fresh data after a cha
   const other = await call(app, tokens[1], 'get', '').set('If-None-Match', changed.headers.etag).expect(200);
   assert.equal(other.body.notes.length, 0);
 });
+
+import { demoRecords, seedDemo } from '../src/demo-data.js';
+
+test('demo sample data is valid and lands in the demo user only', async () => {
+  const created = [];
+  await seedDemo({ create: async (collection, userId, values) => created.push({ collection, userId, values }) }, 'demo-user');
+  const counts = Object.fromEntries(Object.entries(demoRecords()).map(([k, v]) => [k, v.length]));
+  assert.equal(created.length, Object.values(counts).reduce((a, b) => a + b, 0));
+  assert.ok(created.every((c) => c.userId === 'demo-user'));
+  assert.ok(created.some((c) => c.collection === 'notes' && c.values.kind === 'reminder' && c.values.dueDate));
+  assert.ok(created.filter((c) => c.collection === 'expenses').every((c) => Number.isInteger(c.values.amountMinor)));
+});

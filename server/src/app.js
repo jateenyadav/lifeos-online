@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ApiError, createAuthService, hashToken } from './auth.js';
 import { createWorkspaceRouter } from './workspaces.js';
 import { createAiRouter } from './ai.js';
+import { seedDemo } from './demo-data.js';
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(1, 'Enter your ID or email.').max(254),
@@ -189,6 +190,13 @@ export function createApp({
       response,
       await auth.login(values.identifier, values.password),
     );
+  });
+  // "Try the demo": a private sample account for visitors (recruiters!) who don't want to sign up.
+  const demoLimiter = authLimit(30, (request) => `demo:${ipKeyGenerator(request.ip ?? '')}`);
+  app.post('/api/auth/demo', demoLimiter, async (request, response) => {
+    const result = await auth.demo();
+    if (workspaces) await seedDemo(workspaces, result.user.id);
+    await sendSession(request, response, result);
   });
   app.post('/api/auth/register', loginLimiter, async (request, response) => {
     const values = registerSchema.parse(request.body);

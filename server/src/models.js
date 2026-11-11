@@ -19,6 +19,8 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true },
     passwordHash: { type: String, select: false },
     googleId: { type: String, unique: true, sparse: true },
+    // Set only for "Try the demo" accounts; they are deleted after this time.
+    demoExpiresAt: { type: Date, index: { sparse: true } },
   },
   { timestamps: true },
 );
@@ -47,6 +49,8 @@ export const mongoUsers = {
   findByEmail: (email) => User.findOne({ email }).lean(),
   findByGoogleId: (googleId) => User.findOne({ googleId }).lean(),
   findById: (userId) => User.findById(userId).lean(),
+  expiredDemoIds: async (now = new Date()) =>
+    (await User.find({ demoExpiresAt: { $lt: now } }, { _id: 1 }).limit(200).lean()).map((u) => String(u._id)),
   create: async (values) => (await User.create(values)).toObject(),
 };
 

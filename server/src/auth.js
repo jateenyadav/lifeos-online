@@ -18,7 +18,8 @@ export function publicUser(user) {
     name: user.name,
     email: user.email,
     loginId: user.loginId ?? null,
-    provider: user.googleId ? 'google' : 'password',
+    provider: user.googleId ? 'google' : user.demoExpiresAt ? 'demo' : 'password',
+    ...(user.demoExpiresAt ? { demoExpiresAt: new Date(user.demoExpiresAt).toISOString() } : {}),
   };
 }
 
@@ -61,9 +62,9 @@ export function createAuthService({
 }) {
   const dummyHash = bcrypt.hash(randomBytes(32).toString('hex'), 12);
 
-  async function newSession(user) {
+  async function newSession(user, days = sessionDays) {
     const token = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + sessionDays * 86400000);
+    const expiresAt = new Date(Date.now() + days * 86400000);
     await sessions.create({
       tokenHash: hashToken(token),
       userId: String(user._id),
@@ -86,6 +87,20 @@ export function createAuthService({
   }
 
   return {
+    /**
+     * "Try the demo": a private, throw-away account (no sign-up), filled with sample data by the
+     * caller and deleted automatically after 24 hours. Each visitor gets their own, so nobody
+     * sees anyone else's edits.
+     */
+    async demo() {
+      const expires = new Date(Date.now() + 86400000);
+      const user = await users.create({
+        name: 'Demo visitor',
+        email: `demo-${randomBytes(9).toString('hex')}@demo.lifeos.invalid`,
+        demoExpiresAt: expires,
+      });
+      return newSession(user, 1);
+    },
     async register(name, email, password) {
       const normalizedEmail = email.trim().toLowerCase();
       const duplicateMessage =
@@ -148,6 +163,8 @@ export function createAuthService({
     },
     async confirmAccountDeletion(token, { password, idToken }) {
       const { user } = await currentAccount(token);
+      // A demo account has no password; the DELETE confirmation is enough.
+      if (user.demoExpiresAt && !user.googleId) return String(user._id);
       if (user.googleId) {
         if (!idToken)
           throw new ApiError(400, 'Confirm deletion with your Google account.');

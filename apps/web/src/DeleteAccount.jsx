@@ -15,6 +15,7 @@ export default function DeleteAccount({ user, onDeleted }) {
   const [error, setError] = useState('');
   const dialog = useRef(null);
   const google = user.provider === 'google';
+  const demo = user.provider === 'demo';
 
   useEffect(() => {
     if (!open) return undefined;
@@ -88,7 +89,17 @@ export default function DeleteAccount({ user, onDeleted }) {
             onChange={(event) => setConfirmation(event.target.value)}
           />
         </label>
-        {google ? (
+        {demo ? (
+          <button
+            type="button"
+            className="delete-account-confirm"
+            disabled={busy || confirmation !== 'DELETE'}
+            onClick={() => remove({})}
+          >
+            <Trash2 size={16} />
+            {busy ? 'Deleting…' : 'Delete this demo now'}
+          </button>
+        ) : google ? (
           <div className="delete-account-google">
             <p>Confirm it's you with Google:</p>
             <GoogleButton

@@ -15,6 +15,7 @@ await Promise.all(
     model.createIndexes(),
   ),
 );
+const deleteAccountData = createAccountDeletion();
 const app = createApp({
   config,
   users: mongoUsers,
@@ -22,7 +23,7 @@ const app = createApp({
   workspaces: mongoWorkspaces,
   aiKnowledge: mongoAiKnowledge,
   cloudAi: createCloudAi({ ...config.cloudAi, usage: mongoAiUsage }),
-  deleteAccountData: createAccountDeletion(),
+  deleteAccountData,
   verifyGoogle: createGoogleVerifier(config.googleClientIds),
   isDatabaseReady: async () => {
     if (mongoose.connection.readyState !== 1) return false;
@@ -42,6 +43,18 @@ const server = app.listen(config.port, '0.0.0.0', () => {
       'Password login is available. Add GOOGLE_CLIENT_IDS to enable Google sign-in.',
     );
 });
+// Demo accounts live for 24 hours; sweep expired ones on start and every hour.
+async function sweepDemoAccounts() {
+  try {
+    const ids = await mongoUsers.expiredDemoIds();
+    for (const id of ids) await deleteAccountData(id).catch(() => {});
+    if (ids.length) console.log(`Removed ${ids.length} expired demo account(s).`);
+  } catch (error) {
+    console.error(`Demo sweep failed: ${error.message}`);
+  }
+}
+void sweepDemoAccounts();
+setInterval(sweepDemoAccounts, 3600000).unref();
 server.on('error', (error) => {
   console.error(`API could not start: ${error.code}`);
   void mongoose.disconnect().finally(() => process.exit(1));

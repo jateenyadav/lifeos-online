@@ -1429,3 +1429,11 @@
 .delete-account-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 .delete-account-field > span { display: inline; }
 .delete-word { display: inline; font-weight: 700; letter-spacing: 0.04em; }
+.demo-banner {
+  margin: 0;
+  padding: 10px 16px;
+  background: #eef2e6;
+  color: #263e34;
+  font-size: 0.9rem;
+  border-bottom: 1px solid rgb(38 62 52 / 0.12);
+}

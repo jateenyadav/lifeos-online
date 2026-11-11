@@ -113,7 +113,7 @@ export default function Dashboard({
           </span>
           <div>
             <strong>{user.name}</strong>
-            <small>{user.email}</small>
+            <small>{user.provider === 'demo' ? 'Demo account' : user.email}</small>
             {onAccountDeleted && (
               <DeleteAccount user={user} onDeleted={onAccountDeleted} />
             )}
@@ -130,6 +130,12 @@ export default function Dashboard({
         </div>
       </aside>
       <main className="workspace-main">
+        {user.provider === 'demo' && (
+          <p className="demo-banner" role="status">
+            You're in a demo account with sample data. Try anything; it's deleted
+            automatically within 24 hours.
+          </p>
+        )}
         <header className="workspace-topbar">
           <div>
             <span>Your space</span>

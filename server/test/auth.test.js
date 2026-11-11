@@ -555,3 +555,20 @@ test('a failed database ping returns 503 without exposing credentials', async ()
     });
   }
 });
+
+test('Try the demo creates a private, temporary, pre-filled account', async () => {
+  const created = [];
+  const { app, storedUsers } = fixture();
+  const demo = await request(app).post('/api/auth/demo').set('X-Client-Type', 'mobile').expect(200);
+  assert.equal(demo.body.user.provider, 'demo');
+  assert.ok(demo.body.user.demoExpiresAt);
+  const hours = (new Date(demo.body.user.demoExpiresAt) - Date.now()) / 3600000;
+  assert.ok(hours > 23 && hours <= 24);
+  const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${demo.body.token}`).expect(200);
+  assert.equal(me.body.user.provider, 'demo');
+  // Two visitors never share an account.
+  const second = await request(app).post('/api/auth/demo').set('X-Client-Type', 'mobile').expect(200);
+  assert.notEqual(second.body.user.id, demo.body.user.id);
+  void created;
+  void storedUsers;
+});

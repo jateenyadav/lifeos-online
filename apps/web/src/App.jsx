@@ -492,6 +492,14 @@ export default function App() {
                 <p className="access-note">
                   Google creates your account on your first sign-in.
                 </p>
+                <button
+                  type="button"
+                  className="auth-demo"
+                  onClick={() => authenticate('/auth/demo')}
+                  disabled={busy || restoring}
+                >
+                  Just looking? Try the demo, no sign-up
+                </button>
               </>
               <div className="secure-note">
                 <LockKeyhole size={13} />

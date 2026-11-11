@@ -760,3 +760,17 @@ form input:disabled {
     transition: none !important;
   }
 }
+
+/* "Try the demo" link on the sign-in page */
+.auth-demo {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px dashed rgb(38 62 52 / 0.35);
+  border-radius: 12px;
+  background: transparent;
+  color: #263e34;
+  font-weight: 600;
+}
+.auth-demo:hover:not(:disabled) { background: rgb(38 62 52 / 0.05); }

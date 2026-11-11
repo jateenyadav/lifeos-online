@@ -27,6 +27,8 @@ The cloud deployment still needs your hosting account and private code repositor
   "Ran 5 km for 30 minutes". The AI uses tool calling to propose one entry, you check it, then press Save.
   Spending questions ("How much on food this month?") are answered from your own data.
   The AI can only propose; the normal, validated create endpoint does the saving.
+- **Try the demo:** one click on the sign-in page opens a private sample account (workouts, spending, reminders,
+  routines). Every visitor gets their own, and it is deleted automatically after 24 hours.
 - **Delete account on the website** (it was mobile-only).
 - **Fair rate limits behind the proxy:** web users all arrive from the Netlify IP, so limits are now per session
   and per account instead of per IP.
