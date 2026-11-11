@@ -738,3 +738,18 @@ test('origin protection applies to all workspace write methods', async () => {
   assert.match(preflight.headers['access-control-allow-methods'], /PATCH/);
   assert.match(preflight.headers['access-control-allow-methods'], /DELETE/);
 });
+
+test('workspace polling returns 304 when nothing changed, fresh data after a change', async () => {
+  const { app, tokens } = fixture();
+  const first = await call(app, tokens[0], 'get', '').expect(200);
+  const etag = first.headers.etag;
+  assert.ok(etag);
+  await call(app, tokens[0], 'get', '').set('If-None-Match', etag).expect(304);
+  await call(app, tokens[0], 'post', '/notes').send(note).expect(201);
+  const changed = await call(app, tokens[0], 'get', '').set('If-None-Match', etag).expect(200);
+  assert.notEqual(changed.headers.etag, etag);
+  assert.equal(changed.body.notes.length, 1);
+  // Another user's ETag never matches mine.
+  const other = await call(app, tokens[1], 'get', '').set('If-None-Match', changed.headers.etag).expect(200);
+  assert.equal(other.body.notes.length, 0);
+});

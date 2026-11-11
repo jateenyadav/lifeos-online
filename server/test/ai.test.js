@@ -6,7 +6,7 @@ import { hashToken } from '../src/auth.js';
 import { buildAiContext } from '../src/ai-context.js';
 import { createAiProviders, validateOllamaUrl } from '../src/ai-providers.js';
 
-function fixture({ answer } = {}) {
+function fixture({ answer, cloudAi } = {}) {
   const tokens = ['a'.repeat(43), 'b'.repeat(43)];
   const owners = [
     { _id: 'owner-1', name: 'First', email: 'one@example.com' },
@@ -93,6 +93,7 @@ function fixture({ answer } = {}) {
     workspaces: store,
     aiKnowledge: knowledge,
     aiProviders: providers,
+    ...(cloudAi ? { cloudAi } : {}),
   });
   const call = (method, path, owner = 0) => {
     const agent = request(app);
@@ -449,4 +450,122 @@ test('AI status handles offline Ollama and model errors without leaking data', a
   assert.equal(status.available, false);
   assert.deepEqual(status.models, []);
   assert.doesNotMatch(status.message, /private network detail/);
+});
+
+// ---- "LifeOS AI": free server-side models ----
+import { createCloudAi } from '../src/ai-cloud.js';
+
+const reply = (content) => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ choices: [{ message: { content } }] }),
+  text: async () => '',
+});
+const lifeosQuestion = {
+  provider: 'lifeos',
+  cloudConsent: true,
+  topics: ['workouts'],
+  question: 'What workouts have I saved?',
+};
+
+test('LifeOS AI answers with server keys, falls back between providers and counts the daily allowance', async () => {
+  const seen = [];
+  const fetchImpl = async (url, init) => {
+    seen.push({ url, body: JSON.parse(init.body) });
+    if (url.includes('groq')) return { ok: false, status: 429, json: async () => ({}), text: async () => 'busy' };
+    return reply('You saved one workout: My leg day. [S1]');
+  };
+  const cloudAi = createCloudAi({ env: { GROQ_API_KEY: 'g', GEMINI_API_KEY: 'm' }, dailyLimit: 2, fetchImpl });
+  const { call } = fixture({ cloudAi });
+  const status = await call('get', '/status').expect(200);
+  assert.equal(status.body.lifeos.available, true);
+  const first = await call('post', '/chat').send(lifeosQuestion).expect(200);
+  assert.match(first.body.answer, /leg day/);
+  assert.equal(first.body.model, 'gemini');
+  assert.equal(first.body.remainingToday, 1);
+  // Only this user's data went to the model.
+  const system = seen.at(-1).body.messages[0].content;
+  assert.match(system, /My leg day/);
+  assert.doesNotMatch(system, /PRIVATE OTHER USER/);
+  await call('post', '/chat').send(lifeosQuestion).expect(200);
+  const third = await call('post', '/chat').send(lifeosQuestion).expect(429);
+  assert.match(third.body.message, /today's 2 free AI questions/);
+  // Another user has their own allowance.
+  await call('post', '/chat', 1).send(lifeosQuestion).expect(200);
+});
+
+test('LifeOS AI without server keys says so clearly', async () => {
+  const { call } = fixture({ cloudAi: createCloudAi({ env: {} }) });
+  const status = await call('get', '/status').expect(200);
+  assert.equal(status.body.lifeos.available, false);
+  const result = await call('post', '/chat').send(lifeosQuestion).expect(503);
+  assert.match(result.body.message, /not set up/);
+});
+
+test('LifeOS AI requires the cloud consent flag', async () => {
+  const { call } = fixture({ cloudAi: createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl: async () => reply('x') }) });
+  const withoutConsent = { ...lifeosQuestion };
+  delete withoutConsent.cloudConsent;
+  await call('post', '/chat').send(withoutConsent).expect(400);
+});
+
+// ---- "Tell LifeOS": tool calling that proposes records ----
+const toolCall = (name, args) => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ choices: [{ message: { content: '', tool_calls: [{ id: 't1', type: 'function', function: { name, arguments: JSON.stringify(args) } }] } }] }),
+  text: async () => '',
+});
+
+test('Tell LifeOS turns a sentence into a proposed expense, without saving it', async () => {
+  const bodies = [];
+  const fetchImpl = async (_url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return toolCall('add_expense', { title: 'Lunch with Rahul', amount: 250, category: 'Food', date: '2026-11-10', payment: 'UPI' });
+  };
+  const cloudAi = createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl });
+  const { call, store } = fixture({ cloudAi });
+  store.list = async () => [];
+  const result = await call('post', '/act').send({ message: 'spent 250 on lunch with Rahul yesterday', today: '2026-11-11' }).expect(200);
+  assert.equal(result.body.proposal.collection, 'expenses');
+  assert.deepEqual(result.body.proposal.values, {
+    title: 'Lunch with Rahul', date: '2026-11-10', amountMinor: 25000, category: 'Food', payment: 'UPI', note: '',
+  });
+  assert.match(result.body.reply, /₹250/);
+  assert.match(bodies[0].messages[0].content, /Today is 2026-11-11/);
+  assert.ok(bodies[0].tools.some((t) => t.function.name === 'add_expense'));
+});
+
+test('Tell LifeOS answers spending questions from the user\'s own expenses only', async () => {
+  let step = 0;
+  const fetchImpl = async (_url, init) => {
+    step += 1;
+    if (step === 1) return toolCall('spending_summary', { from: '2026-11-01', to: '2026-11-30', category: 'Food' });
+    const tool = JSON.parse(init.body).messages.find((m) => m.role === 'tool');
+    const data = JSON.parse(tool.content);
+    return reply(`You spent ${data.total} on food.`);
+  };
+  const cloudAi = createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl });
+  const { call, store } = fixture({ cloudAi });
+  const lists = [];
+  store.list = async (collection, owner) => {
+    lists.push(owner);
+    return [
+      { title: 'Lunch', date: '2026-11-03', amountMinor: 25000, category: 'Food' },
+      { title: 'Dinner', date: '2026-11-05', amountMinor: 50050, category: 'Food' },
+      { title: 'Cab', date: '2026-11-05', amountMinor: 30000, category: 'Travel' },
+      { title: 'Old', date: '2026-10-05', amountMinor: 99900, category: 'Food' },
+    ];
+  };
+  const result = await call('post', '/act').send({ message: 'how much on food this month?', today: '2026-11-11' }).expect(200);
+  assert.equal(result.body.reply, 'You spent ₹750.5 on food.');
+  assert.deepEqual(lists, ['owner-1']);
+});
+
+test('Tell LifeOS rejects an invalid proposal instead of showing it', async () => {
+  const fetchImpl = async () => toolCall('add_expense', { title: 'Weird', amount: -5, category: 'Food', date: 'not-a-date' });
+  const { call } = fixture({ cloudAi: createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl }) });
+  const result = await call('post', '/act').send({ message: 'spent minus five', today: '2026-11-11' }).expect(200);
+  assert.equal(result.body.proposal, undefined);
+  assert.match(result.body.reply, /couldn't turn that into a valid entry|Done|amount/i);
 });

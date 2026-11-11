@@ -1,34 +1,12 @@
 # Android login on any network
 
-## Handoff status: 8 October 2026
+## Status (11 November 2026)
 
-Only use Render Free and MongoDB Atlas Free for this setup.
-Do not switch hosting providers or create paid resources.
-
-- Done: `PORT` and `MONGODB_URI` come from environment variables.
-- Done: `/health` and `/api/health` ping MongoDB. A failed ping returns HTTP 503 without database details.
-- Done: login, sign-up, Google login, and session restore each allow 90 seconds total for sending and reading a response.
-- Done: after 5 seconds, the login screen says **Waking up the server, this can take up to a minute**. Tests cover all four actions and the timeout.
-- Done: local `.env` files, mobile settings, signing keys, build files, and APKs are excluded from Git. Only `.env.example` templates are selected.
-- Done: checked the selected text files for private keys, known API token formats, and MongoDB passwords. None were found.
-- Done: JavaScript lint, web build, all 118 JavaScript tests, all 74 Flutter tests, and Flutter analysis pass. Formatting checks pass for the changed JavaScript, YAML, Markdown, and Dart files.
-- Done: `npm run setup:google -- --check` reports matching local Web, backend, Android, and iOS client IDs. This does not prove that the Google console or real phone is configured.
-- Done: created and pushed the NEW PRIVATE repository `jateenyadav/lifeos-online`, on branch `main`. GitHub reports `isPrivate: true`. Local `origin` points to this repository.
-- Important: the existing `jateenyadav/LifeOS` GitHub repository is PUBLIC. Do not push this deployment to it. It was left unchanged.
-- Blocked: the Render plugin is available but is not connected in this chat. No Render service was created by this chat.
-- Your action: enable the Render connection, or use the exact Render dashboard steps below.
-- Your action: create Atlas Free, its database user, and the `0.0.0.0/0` access rule. Paste the database link into Render yourself, never into chat.
-- Blocked as expected: `npm run api:check` reports **No online backend is configured**. `npm run build:android` stops at that same safety check. No release APK was produced. This is not a Flutter compiler error.
-- Waiting: `npm run setup:api` needs the live Render address. Do not run it with a placeholder. Then rerun `npm run api:check` and `npm run build:android`.
-- Waiting: real-phone tests on mobile data, including native Google sign-in.
-
-The local mobile development settings have a Google Web client ID, but no API address.
-The local production settings do not exist yet.
-`npm run setup:api` creates them after the real backend passes its health check.
-Do not invent a Render address, copy the local MongoDB link into Render, or build with a fake address.
-The existing `app-debug.apk` is an OLD build. It is not the online release.
-
-For a new chat: read this status first. Inspect the existing private repository and any connected Render service before creating anything else. Continue at the first unfinished step. Never ask for database passwords or connection links in chat.
+- Live: website https://lifeos-jateen.netlify.app, API on Render Free (`lifeos-api`), data in MongoDB Atlas Free.
+- The repository `jateenyadav/lifeos-online` is public. Secrets live only in Render and Netlify settings.
+- `WEB_ORIGINS` and the AI keys are `sync: false` in `render.yaml`, so a Blueprint sync never blanks them.
+- Optional "LifeOS AI": add `GROQ_API_KEY` and/or `GEMINI_API_KEY` in Render → lifeos-api → Environment.
+  Without them, Personal AI still works with local Ollama or your own OpenAI/Bedrock key.
 
 ## 1. What the error means
 

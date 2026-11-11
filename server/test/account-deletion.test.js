@@ -22,7 +22,7 @@ function fixture({
   const token = randomBytes(32).toString('base64url');
   const secondToken = randomBytes(32).toString('base64url');
   const otherToken = randomBytes(32).toString('base64url');
-  const collections = [...Object.keys(workspaceModels), 'aiKnowledge'];
+  const collections = [...Object.keys(workspaceModels), 'aiKnowledge', 'aiUsage'];
   const records = {
     users: [
       {
@@ -84,6 +84,7 @@ function fixture({
     users: models.users,
     sessions: models.sessions,
     aiKnowledge: models.aiKnowledge,
+    aiUsage: models.aiUsage,
     workspaces: Object.fromEntries(
       Object.keys(workspaceModels).map((name) => [name, models[name]]),
     ),

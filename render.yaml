@@ -14,8 +14,17 @@ services:
         value: production
       - key: MONGODB_URI
         sync: false
+      # Set in the Render dashboard (https://lifeos-jateen.netlify.app). sync: false so a
+      # Blueprint sync can never blank it — that would make every web write fail with 403.
       - key: WEB_ORIGINS
-        value: ''
+        sync: false
+      # Free AI for "LifeOS AI" (server-held keys; set in the Render dashboard).
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: GOOGLE_CLIENT_IDS
         sync: false
       - key: SESSION_DAYS

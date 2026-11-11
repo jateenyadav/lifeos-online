@@ -226,13 +226,22 @@ test('registration rotates an existing mobile session', async () => {
     .expect(401);
 });
 
-test('registration is rate limited along with password login', async () => {
+test('sign-in attempts are limited per account, without locking out other users', async () => {
   const { app } = fixture();
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await mobileRegister(app, { email: 'invalid' }).expect(400);
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await mobileLogin(app, { identifier: 'target@example.com', password: 'wrong-password-123' }).expect(401);
   }
-  await mobileRegister(app).expect(429);
-  await mobileLogin(app).expect(429);
+  await mobileLogin(app, { identifier: 'target@example.com', password: 'wrong-password-123' }).expect(429);
+  // Same network, different account: still allowed (web users share the proxy IP).
+  await mobileRegister(app).expect(201);
+});
+
+test('one network is capped at 100 sign-in attempts per 15 minutes', async () => {
+  const { app } = fixture();
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    await mobileLogin(app, { identifier: `user${attempt}@example.com`, password: 'wrong-password-123' }).expect(401);
+  }
+  await mobileLogin(app, { identifier: 'new@example.com', password: 'wrong-password-123' }).expect(429);
 });
 
 test('mobile password login creates a hashed, revocable shared session', async () => {
@@ -428,7 +437,7 @@ test('unconfigured Google auth and unsigned tokens are rejected', async () => {
 
 test('rate limits repeated sign-in attempts', async () => {
   const { app } = fixture();
-  for (let attempt = 0; attempt < 20; attempt += 1)
+  for (let attempt = 0; attempt < 10; attempt += 1)
     await mobileLogin(app, { identifier: '' }).expect(400);
   const response = await mobileLogin(app, { identifier: '' }).expect(429);
   assert.match(response.body.message, /Too many sign-in attempts/);

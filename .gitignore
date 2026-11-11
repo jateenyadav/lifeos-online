@@ -22,3 +22,8 @@ apps/mobile/android/key.properties
 *.keystore
 GoogleService-Info.plist
 google-services.json
+
+# Personal assistant instructions (kept locally, not published)
+AGENTS.md
+# Local demo-video build files
+brag-output/

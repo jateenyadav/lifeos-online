@@ -2,9 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { rateLimit } from 'express-rate-limit';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
-import { ApiError, createAuthService } from './auth.js';
+import { ApiError, createAuthService, hashToken } from './auth.js';
 import { createWorkspaceRouter } from './workspaces.js';
 import { createAiRouter } from './ai.js';
 
@@ -62,6 +62,7 @@ export function createApp({
   workspaces,
   aiKnowledge,
   aiProviders,
+  cloudAi,
   deleteAccountData,
   isDatabaseReady = () => true,
 }) {
@@ -118,6 +119,13 @@ export function createApp({
       database: ready ? 'connected' : 'disconnected',
     });
   });
+  // Behind the Netlify proxy every web request arrives from a Netlify IP, so an IP-only key
+  // would make all web users share one bucket. Signed-in requests are keyed by their session
+  // instead (hashed, never the raw token); everything else by IP.
+  const clientKey = (request) => {
+    const token = tokenFrom(request);
+    return token ? `s:${hashToken(token).slice(0, 32)}` : ipKeyGenerator(request.ip ?? '');
+  };
   app.use(
     '/api',
     rateLimit({
@@ -125,6 +133,7 @@ export function createApp({
       limit: 120,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
+      keyGenerator: clientKey,
       message: { message: 'Too many requests. Please try again shortly.' },
     }),
   );
@@ -138,15 +147,29 @@ export function createApp({
     }
     next();
   });
-  const loginLimiter = rateLimit({
-    windowMs: 15 * 60000,
-    limit: 20,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    message: {
-      message: 'Too many sign-in attempts. Please try again in 15 minutes.',
-    },
+  // Two limits on sign-in/sign-up. Per account (ID/email): 10 tries per 15 minutes — the real
+  // brute-force defence, and one person's typos never lock out anyone else. Per network: 100,
+  // because every web user arrives through the same Netlify proxy IP.
+  const authLimit = (limit, keyGenerator) =>
+    rateLimit({
+      windowMs: 15 * 60000,
+      limit,
+      keyGenerator,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      message: {
+        message: 'Too many sign-in attempts. Please try again in 15 minutes.',
+      },
+    });
+  const perAccount = authLimit(10, (request) => {
+    const who = String(request.body?.identifier ?? request.body?.email ?? '')
+      .trim()
+      .toLowerCase()
+      .slice(0, 254);
+    return who ? `a:${who}` : `k:${clientKey(request)}`;
   });
+  const perNetwork = authLimit(100, (request) => ipKeyGenerator(request.ip ?? ''));
+  const loginLimiter = [perNetwork, perAccount];
   const sendSession = async (request, response, result) => {
     const previousToken = tokenFrom(request);
     if (previousToken) await auth.logout(previousToken);
@@ -210,6 +233,7 @@ export function createApp({
       store: workspaces,
       knowledge: aiKnowledge,
       providers: aiProviders,
+      ...(cloudAi ? { cloud: cloudAi } : {}),
       config,
       currentUser: (request) => auth.current(tokenFrom(request)),
     }),

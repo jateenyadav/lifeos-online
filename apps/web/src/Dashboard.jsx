@@ -19,6 +19,7 @@ import Routines from './workspaces/Routines.jsx';
 import Spending from './workspaces/Spending.jsx';
 import PersonalAi from './workspaces/PersonalAi.jsx';
 import './workspaces/workspaces.css';
+import DeleteAccount from './DeleteAccount.jsx';
 
 const spaces = [
   { id: 'today', title: 'Today', icon: CalendarDays, component: Today },
@@ -56,6 +57,7 @@ export default function Dashboard({
   busy,
   error,
   onLogout,
+  onAccountDeleted,
   onSessionExpired,
 }) {
   const [route, setRoute] = useState(readRoute);
@@ -112,6 +114,9 @@ export default function Dashboard({
           <div>
             <strong>{user.name}</strong>
             <small>{user.email}</small>
+            {onAccountDeleted && (
+              <DeleteAccount user={user} onDeleted={onAccountDeleted} />
+            )}
           </div>
           <button
             className="space-icon-button"

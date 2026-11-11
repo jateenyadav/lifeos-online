@@ -293,6 +293,10 @@ export default function App() {
         busy={busy}
         error={error}
         onLogout={logout}
+        onAccountDeleted={() => {
+          setUser(null);
+          setError('');
+        }}
         onSessionExpired={sessionExpired}
       />
     );

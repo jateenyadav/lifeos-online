@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { ApiError } from './auth.js';
@@ -90,7 +91,7 @@ export const workspaceSchemas = {
     .strict(),
 };
 
-function validate(collection, values) {
+export function validate(collection, values) {
   const parsed = workspaceSchemas[collection].parse(values);
   if (collection === 'notes' && parsed.kind === 'reminder' && !parsed.dueDate)
     throw new ApiError(400, 'Choose a date for your reminder.');
@@ -115,11 +116,17 @@ export function createWorkspaceRouter({ store, currentUser }) {
         store.list(collection, request.workspaceUser.id),
       ),
     );
-    response.json(
+    const body = JSON.stringify(
       Object.fromEntries(
         collections.map((collection, index) => [collection, lists[index]]),
       ),
     );
+    // The web app polls this every 30 s. An ETag lets it skip downloading and re-rendering
+    // everything when nothing changed (304 Not Modified, empty body).
+    const etag = `"${createHash('sha1').update(body).digest('base64url')}"`;
+    response.set('ETag', etag);
+    if (request.get('if-none-match') === etag) return response.status(304).end();
+    response.type('application/json').send(body);
   });
   router.use('/money', createMoneyRouter({ store }));
   router.param('collection', (request, _response, next, collection) => {

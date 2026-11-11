@@ -43,3 +43,34 @@ export const mongoAiKnowledge = {
     return (await AiKnowledge.deleteOne({ _id: id, userId })).deletedCount > 0;
   },
 };
+
+// Daily AI allowance counters. One atomic $inc per question; old days expire by TTL index.
+const usageSchema = new mongoose.Schema(
+  {
+    _id: String,
+    userId: String,
+    n: Number,
+    expiresAt: { type: Date, expires: 0 },
+  },
+  { versionKey: false },
+);
+export const AiUsage = mongoose.model('AiUsage', usageSchema);
+
+export const mongoAiUsage = {
+  async hit(key, windowMs) {
+    const now = Date.now();
+    const userId = key.split(':')[1];
+    const update = () =>
+      AiUsage.findOneAndUpdate(
+        { _id: key },
+        { $inc: { n: 1 }, $setOnInsert: { userId, expiresAt: new Date(now + windowMs) } },
+        { upsert: true, new: true, lean: true },
+      );
+    try {
+      return (await update()).n;
+    } catch (error) {
+      if (error?.code === 11000) return (await update()).n; // two first questions raced
+      throw error;
+    }
+  },
+};

@@ -18,11 +18,26 @@ Run `npm run build:android` to build the installable app with that address.
 The setup checks the backend and database before saving the URL.
 The cloud deployment still needs your hosting account and private code repository.
 
+## What's new
+
+- **LifeOS AI (free, no key):** Personal AI now works on the live website. The server holds free AI keys
+  (Groq first, then Google Gemini, then OpenRouter) and falls back automatically. Each user gets a daily allowance.
+  Local Ollama and your own OpenAI / AWS Bedrock keys still work.
+- **Tell LifeOS:** type "Spent 250 on lunch with Rahul yesterday", "Remind me to pay rent on the 1st" or
+  "Ran 5 km for 30 minutes". The AI uses tool calling to propose one entry, you check it, then press Save.
+  Spending questions ("How much on food this month?") are answered from your own data.
+  The AI can only propose; the normal, validated create endpoint does the saving.
+- **Delete account on the website** (it was mobile-only).
+- **Fair rate limits behind the proxy:** web users all arrive from the Netlify IP, so limits are now per session
+  and per account instead of per IP.
+- **Lighter polling:** the 30-second refresh uses an ETag and gets `304 Not Modified` when nothing changed.
+- **CI:** GitHub Actions runs the JavaScript tests, a MongoDB integration test, the web build and the Flutter tests.
+
 ## Current features
 
 This milestone includes email/password registration, ID/email + password login, Google sign-in, independent daily workspaces, session restoration, and logout.
 The same account works on web, Android, and iOS.
-Mobile users can permanently delete their LifeOS account after confirming their password or Google identity. See [Account deletion](docs/ACCOUNT_DELETION.md).
+Users can permanently delete their LifeOS account on the website or mobile after confirming their password or Google identity. See [Account deletion](docs/ACCOUNT_DELETION.md).
 There is no email verification, password-reset flow, or account-linking flow yet.
 The small card on the website's left side is decorative.
 

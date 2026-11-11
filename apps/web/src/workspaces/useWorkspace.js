@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { apiRequest } from '../api.js';
+import { apiRequest, NOT_MODIFIED } from '../api.js';
 
 const empty = {
   notes: [],
@@ -22,6 +22,7 @@ export default function useWorkspace(onSessionExpired) {
   const [notice, setNotice] = useState('');
   const locked = useRef(false);
   const revision = useRef(0);
+  const lastEtag = useRef(null);
   const active = useRef(true);
   const expired = useRef(onSessionExpired);
   useEffect(() => {
@@ -119,7 +120,12 @@ export default function useWorkspace(onSessionExpired) {
       try {
         const result = await apiRequest('/workspaces', {
           signal: controller.signal,
+          etag: lastEtag.current,
+          onEtag: (value) => {
+            lastEtag.current = value;
+          },
         });
+        if (result === NOT_MODIFIED) return;
         if (
           !controller.signal.aborted &&
           !locked.current &&

@@ -5,7 +5,10 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest(path, { method = 'GET', body, signal } = {}) {
+/** Returned instead of data when the server answers 304 Not Modified. */
+export const NOT_MODIFIED = Symbol('not-modified');
+
+export async function apiRequest(path, { method = 'GET', body, signal, etag, onEtag } = {}) {
   let response;
   try {
     response = await fetch(
@@ -13,7 +16,10 @@ export async function apiRequest(path, { method = 'GET', body, signal } = {}) {
       {
         method,
         credentials: 'include',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        headers: {
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+          ...(etag ? { 'If-None-Match': etag } : {}),
+        },
         body: body ? JSON.stringify(body) : undefined,
         signal,
       },
@@ -26,6 +32,8 @@ export async function apiRequest(path, { method = 'GET', body, signal } = {}) {
     );
   }
   if (response.status === 204) return null;
+  if (response.status === 304) return NOT_MODIFIED;
+  if (onEtag && response.headers.get('etag')) onEtag(response.headers.get('etag'));
   const data = await response.json().catch(() => null);
   if (!response.ok)
     throw new ApiError(

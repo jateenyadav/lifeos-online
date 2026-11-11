@@ -15,6 +15,14 @@ const environmentSchema = z.object({
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
   OLLAMA_URL: z.string().default('http://127.0.0.1:11434'),
   OLLAMA_MODEL: z.string().min(1).max(200).default('llama3.2:3b'),
+  // "LifeOS AI": free cloud models with server-held keys (any subset works).
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().optional(),
+  AI_DAILY_LIMIT: z.coerce.number().int().min(1).max(1000).default(30),
 });
 
 export function readConfig(environment = process.env) {
@@ -58,6 +66,17 @@ export function readConfig(environment = process.env) {
     cookieSameSite: values.COOKIE_SAME_SITE,
     trustProxyHops: values.TRUST_PROXY_HOPS,
     ollamaUrl: validateOllamaUrl(values.OLLAMA_URL),
+    cloudAi: {
+      env: {
+        GROQ_API_KEY: values.GROQ_API_KEY,
+        GROQ_MODEL: values.GROQ_MODEL,
+        GEMINI_API_KEY: values.GEMINI_API_KEY,
+        GEMINI_MODEL: values.GEMINI_MODEL,
+        OPENROUTER_API_KEY: values.OPENROUTER_API_KEY,
+        OPENROUTER_MODEL: values.OPENROUTER_MODEL,
+      },
+      dailyLimit: values.AI_DAILY_LIMIT,
+    },
     ollamaModel: values.OLLAMA_MODEL,
   };
 }
