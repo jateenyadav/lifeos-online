@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
+  BrainCircuit,
   Check,
-  ChevronRight,
+  Dumbbell,
   Eye,
   EyeOff,
+  Heart,
   Leaf,
   LockKeyhole,
   Monitor,
+  NotebookPen,
   Smartphone,
   Sparkles,
+  Sun,
+  Wallet,
 } from 'lucide-react';
 import { apiRequest } from './api.js';
 import GoogleButton from './GoogleButton.jsx';
@@ -29,12 +34,33 @@ function Brand() {
   );
 }
 
+const previewSpaces = [
+  { id: 'notes', label: 'Notes & reminders', icon: NotebookPen },
+  { id: 'workouts', label: 'Workouts', icon: Dumbbell },
+  { id: 'routines', label: 'Routines', icon: Heart },
+  { id: 'spending', label: 'Spending', icon: Wallet },
+  { id: 'ai', label: 'Personal AI', icon: BrainCircuit },
+];
+
+function SpaceChips({ className = '' }) {
+  return (
+    <ul className={`space-chips ${className}`} aria-label="What is inside">
+      {previewSpaces.map(({ id, label, icon: Icon }) => (
+        <li key={id} data-space={id}>
+          <Icon size={15} aria-hidden="true" />
+          {label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function StoryPanel() {
   return (
     <section className="story-panel" aria-label="About LifeOS">
       <div className="story-content">
         <span className="eyebrow">
-          <span className="status-dot" /> YOUR LIFE, A LITTLE LIGHTER
+          <span className="status-dot" /> YOUR EVERYDAY, IN ONE CALM PLACE
         </span>
         <h1>
           Make room for
@@ -42,68 +68,91 @@ function StoryPanel() {
           what <em>matters.</em>
         </h1>
         <p className="story-description">
-          A calmer place to bring your life together.
-          <br className="desktop-break" /> One account, wherever your day takes
-          you.
+          Notes, workouts, routines, spending and a personal AI that turns a
+          sentence into an entry. One account for web, Android and iOS.
         </p>
+        <SpaceChips />
         <div className="illustration" aria-hidden="true">
-          <div className="orbit orbit-one" />
-          <div className="orbit orbit-two" />
-          <div className="floating-note">
-            <Sparkles size={16} />
-            <span>A little more balance</span>
-          </div>
-          <div className="preview-card">
-            <div className="preview-top">
-              <span className="preview-leaf">
-                <Leaf size={18} />
-              </span>
-              <span>YOUR SPACE</span>
-              <span className="preview-dots">•••</span>
-            </div>
-            <p className="preview-greeting">Hello, new beginnings.</p>
-            <p className="preview-subtitle">
-              Good things start with a little space.
-            </p>
-            <div className="preview-mood">
-              <span>☀</span>
+          <span className="preview-label">Preview · sample data</span>
+          <div className="preview-card preview-today">
+            <div className="preview-hero">
               <div>
-                <strong>A fresh start</strong>
-                <small>One step at a time</small>
+                <small>YOUR DAY, A LITTLE LIGHTER</small>
+                <strong>
+                  Hello, there<span>.</span>
+                </strong>
               </div>
-              <ChevronRight size={16} />
+              <span className="preview-sun">
+                <Sun size={22} />
+              </span>
+            </div>
+            <div className="preview-stats">
+              <div className="preview-stat" data-space="routines">
+                <svg viewBox="0 0 36 36" className="preview-ring">
+                  <circle cx="18" cy="18" r="14" />
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="14"
+                    pathLength="100"
+                    strokeDasharray="67 100"
+                  />
+                </svg>
+                <div>
+                  <b>2 / 3</b>
+                  <small>Routines done</small>
+                </div>
+              </div>
+              <div className="preview-stat" data-space="workouts">
+                <div className="preview-dots">
+                  {[1, 0, 1, 1, 0, 1, 0].map((on, index) => (
+                    <i key={index} className={on ? 'on' : ''} />
+                  ))}
+                </div>
+                <div>
+                  <b>4 sessions</b>
+                  <small>Last 7 days</small>
+                </div>
+              </div>
             </div>
             <div className="preview-row">
               <span className="mini-check">
                 <Check size={12} />
               </span>
-              <span>Show up for yourself</span>
-              <span className="preview-tag">TODAY</span>
+              <span>Drink 8 glasses of water</span>
+              <span className="preview-tag">Water</span>
             </div>
             <div className="preview-row">
               <span className="mini-check empty" />
-              <span>Leave room to grow</span>
-            </div>
-            <div className="preview-progress">
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
+              <span>Night skin care</span>
+              <span className="preview-tag">Evening</span>
             </div>
           </div>
-          <div className="floating-device">
-            <Smartphone size={20} />
-            <div>
-              <strong>Always with you</strong>
-              <small>Web · Android · iOS</small>
-            </div>
-            <span className="device-check">
-              <Check size={12} />
+          <div className="floating-note preview-spend" data-space="spending">
+            <span className="preview-spend-head">
+              <Wallet size={14} /> This month
+            </span>
+            <strong>₹6,848.50</strong>
+            <span className="preview-bar">
+              <i data-cat="Shopping" style={{ width: '51%' }} />
+              <i data-cat="Food" style={{ width: '25%' }} />
+              <i data-cat="Bills" style={{ width: '12%' }} />
+              <i data-cat="Travel" style={{ width: '7%' }} />
+              <i data-cat="Health" style={{ width: '5%' }} />
             </span>
           </div>
-          <span className="tiny-spark spark-one">✧</span>
-          <span className="tiny-spark spark-two">✧</span>
+          <div className="floating-device preview-tell" data-space="ai">
+            <span className="preview-tell-head">
+              <Sparkles size={14} /> Tell LifeOS
+            </span>
+            <p className="preview-bubble you">Spent 250 on lunch</p>
+            <p className="preview-bubble ai">
+              Add expense: Lunch, ₹250 (Food)?
+            </p>
+            <span className="preview-save">
+              <Check size={12} /> Save
+            </span>
+          </div>
         </div>
         <div className="platform-list">
           <span>
@@ -116,7 +165,7 @@ function StoryPanel() {
             <Smartphone size={15} /> iOS
           </span>
           <span className="platform-divider" />
-          <span>One connected experience</span>
+          <span>One account, one place for your day</span>
         </div>
       </div>
       <p className="story-footnote">
@@ -331,6 +380,7 @@ export default function App() {
                   ? 'Create one account for web, Android, and iOS.'
                   : 'Your space is waiting. Come on in.'}
               </p>
+              <SpaceChips className="login-chips" />
               {error && (
                 <div className="error-message" role="alert" ref={errorRef}>
                   {error}
@@ -469,6 +519,20 @@ export default function App() {
                     <ArrowRight size={18} />
                   </button>
                 </form>
+                <div className="auth-demo-block">
+                  <button
+                    type="button"
+                    className="auth-demo"
+                    onClick={() => authenticate('/auth/demo')}
+                    disabled={busy || restoring}
+                  >
+                    <Sparkles size={18} aria-hidden="true" />
+                    Just looking? Try the demo, no sign-up
+                  </button>
+                  <p>
+                    A private sample account. It is deleted within 24 hours.
+                  </p>
+                </div>
                 <button
                   type="button"
                   className="auth-switch"
@@ -492,14 +556,6 @@ export default function App() {
                 <p className="access-note">
                   Google creates your account on your first sign-in.
                 </p>
-                <button
-                  type="button"
-                  className="auth-demo"
-                  onClick={() => authenticate('/auth/demo')}
-                  disabled={busy || restoring}
-                >
-                  Just looking? Try the demo, no sign-up
-                </button>
               </>
               <div className="secure-note">
                 <LockKeyhole size={13} />
