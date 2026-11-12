@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Archive, Bell, Check, Pin } from 'lucide-react';
+import { Archive, Bell, Check, NotebookPen, Pin } from 'lucide-react';
 import { dateKey, displayDate } from './utils.js';
 import {
   deleteEntry,
@@ -22,6 +22,15 @@ const blank = (kind = 'note') => ({
   completed: false,
   archived: false,
 });
+
+// Each tag gets a steady colour so a wall of notes is easy to scan.
+const tones = ['green', 'peach', 'lavender', 'sand', 'teal', 'rose'];
+const toneFor = (tag = 'Personal') => {
+  let hash = 0;
+  for (const letter of tag.trim().toLowerCase())
+    hash = (hash * 59 + letter.charCodeAt(0)) % 1000003;
+  return tones[hash % tones.length];
+};
 
 export default function Notes({ store, create = false }) {
   const [editor, setEditor] = useState(create ? blank() : null);
@@ -88,6 +97,7 @@ export default function Notes({ store, create = false }) {
       />
       <div className="space-stats">
         <Stat
+          icon={NotebookPen}
           label="In your notebook"
           value={
             notes.filter((entry) => !entry.archived && entry.kind === 'note')
@@ -96,6 +106,7 @@ export default function Notes({ store, create = false }) {
           detail="Ideas safely saved"
         />
         <Stat
+          icon={Bell}
           label="Due now"
           value={
             notes.filter(
@@ -109,6 +120,7 @@ export default function Notes({ store, create = false }) {
           detail="Today and overdue"
         />
         <Stat
+          icon={Pin}
           label="Pinned"
           value={
             notes.filter((entry) => !entry.archived && entry.pinned).length
@@ -203,13 +215,19 @@ export default function Notes({ store, create = false }) {
           <article
             key={entry.id}
             className={`note-card ${entry.pinned ? 'pinned' : ''} ${entry.completed ? 'completed' : ''}`}
+            data-tone={toneFor(entry.tag)}
           >
             <div className="record-meta">
               <span className="record-tag">
-                {entry.kind === 'reminder' ? <Bell size={12} /> : null}
+                {entry.kind === 'reminder' ? (
+                  <Bell size={12} aria-hidden="true" />
+                ) : null}
                 {entry.tag || 'Personal'}
               </span>
-              {entry.pinned && <Pin size={15} />}
+              <span className="record-kind">
+                {entry.kind === 'reminder' ? 'Reminder' : 'Note'}
+              </span>
+              {entry.pinned && <Pin size={15} role="img" aria-label="Pinned" />}
             </div>
             <h2>{entry.title}</h2>
             <p className="note-body">

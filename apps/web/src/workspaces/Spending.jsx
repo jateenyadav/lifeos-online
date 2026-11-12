@@ -1,5 +1,16 @@
 import { useState } from 'react';
-import { Download, Wallet } from 'lucide-react';
+import {
+  CalendarDays,
+  Download,
+  HeartPulse,
+  PiggyBank,
+  Receipt,
+  ShoppingBag,
+  Sparkles,
+  TramFront,
+  Utensils,
+  Wallet,
+} from 'lucide-react';
 import MoneyHub from './MoneyHub.jsx';
 import {
   dateKey,
@@ -20,6 +31,14 @@ import {
   Stat,
 } from './shared.jsx';
 
+const categoryIcons = {
+  Food: Utensils,
+  Travel: TramFront,
+  Shopping: ShoppingBag,
+  Bills: Receipt,
+  Health: HeartPulse,
+  Other: Sparkles,
+};
 const blank = () => ({
   title: '',
   date: dateKey(),
@@ -112,11 +131,13 @@ export default function Spending({ store, create = false }) {
       <MoneyHub store={store} />
       <div className="space-stats">
         <Stat
+          icon={Wallet}
           label="Spent this month"
           value={money(total)}
           detail={`${entries.length} expenses · INR`}
         />
         <Stat
+          icon={PiggyBank}
           label={
             budget
               ? total > budget.limitMinor
@@ -135,6 +156,7 @@ export default function Spending({ store, create = false }) {
           tone={budget && total > budget.limitMinor ? 'warning' : ''}
         />
         <Stat
+          icon={CalendarDays}
           label="Today"
           value={money(
             store.data.expenses
@@ -152,7 +174,9 @@ export default function Spending({ store, create = false }) {
               : 'Give your month a little structure'}
           </h2>
           {budget && (
-            <div className="daily-progress">
+            <div
+              className={`daily-progress ${total > budget.limitMinor ? 'over' : ''}`}
+            >
               <span
                 style={{
                   width: `${Math.min(100, (total / budget.limitMinor) * 100)}%`,
@@ -297,34 +321,44 @@ export default function Spending({ store, create = false }) {
         values={['All', ...expenseCategories]}
         active={filter}
         onChange={setFilter}
+        colored
       />
       <div className="spending-grid">
         <section className="record-list">
-          {visible.map((entry) => (
-            <article className="expense-record" key={entry.id}>
-              <span className="record-symbol">
-                <Wallet size={20} />
-              </span>
-              <div className="record-content">
-                <h2>{entry.title}</h2>
-                <p>
-                  {displayDate(entry.date)} · {entry.category} · {entry.payment}
-                </p>
-                {entry.note && (
-                  <p className="record-description">{entry.note}</p>
-                )}
-              </div>
-              <strong className="expense-amount">
-                {money(entry.amountMinor)}
-              </strong>
-              <RecordActions
-                title={entry.title}
-                saving={store.saving}
-                onEdit={() => open(entry)}
-                onDelete={() => deleteEntry(store, 'expenses', entry)}
-              />
-            </article>
-          ))}
+          {visible.map((entry) => {
+            const CategoryIcon = categoryIcons[entry.category] ?? Wallet;
+            return (
+              <article
+                className="expense-record"
+                key={entry.id}
+                data-cat={entry.category}
+              >
+                <span className="record-symbol" aria-hidden="true">
+                  <CategoryIcon size={20} />
+                </span>
+                <div className="record-content">
+                  <h2>{entry.title}</h2>
+                  <p className="expense-facts">
+                    <span className="category-chip">{entry.category}</span>
+                    {displayDate(entry.date)} · {entry.payment}
+                  </p>
+                  {entry.note && (
+                    <p className="record-description">{entry.note}</p>
+                  )}
+                </div>
+                <strong className="expense-amount">
+                  <span className="amount-sign">Spent</span>−
+                  {money(entry.amountMinor)}
+                </strong>
+                <RecordActions
+                  title={entry.title}
+                  saving={store.saving}
+                  onEdit={() => open(entry)}
+                  onDelete={() => deleteEntry(store, 'expenses', entry)}
+                />
+              </article>
+            );
+          })}
           {!visible.length && (
             <Empty
               title="A clearer picture starts here."
@@ -337,14 +371,33 @@ export default function Spending({ store, create = false }) {
         <aside className="category-breakdown">
           <h2>Where it went</h2>
           <p>All expenses in the selected month</p>
+          {total > 0 && (
+            <div className="category-stack" aria-hidden="true">
+              {expenseCategories.map((category) => {
+                const amount = entries
+                  .filter((entry) => entry.category === category)
+                  .reduce((sum, entry) => sum + entry.amountMinor, 0);
+                return amount ? (
+                  <span
+                    key={category}
+                    data-cat={category}
+                    style={{ width: `${(amount / total) * 100}%` }}
+                  />
+                ) : null;
+              })}
+            </div>
+          )}
           {expenseCategories.map((category) => {
             const amount = entries
               .filter((entry) => entry.category === category)
               .reduce((sum, entry) => sum + entry.amountMinor, 0);
             return (
-              <div key={category}>
+              <div key={category} data-cat={category} className="category-row">
                 <div>
-                  <span>{category}</span>
+                  <span>
+                    <i className="category-swatch" aria-hidden="true" />
+                    {category}
+                  </span>
                   <strong>{money(amount)}</strong>
                 </div>
                 <div className="category-meter">

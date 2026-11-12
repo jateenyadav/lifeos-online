@@ -86,9 +86,19 @@ export default function TellLifeOS({ onSessionExpired }) {
       </div>
       {error && <p className="workspace-error" role="alert">{error}</p>}
       {saved && <p className="workspace-notice" role="status">{saved}</p>}
-      {reply && !proposal && <p className="tell-lifeos-reply" aria-live="polite">{reply}</p>}
+      {reply && !proposal && (
+        <p className="tell-lifeos-reply" aria-live="polite">
+          <span className="tell-lifeos-label">
+            <Sparkles size={14} aria-hidden="true" /> AI answer
+          </span>
+          {reply}
+        </p>
+      )}
       {proposal && (
         <div className="tell-lifeos-proposal" aria-live="polite">
+          <span className="tell-lifeos-label">
+            <Sparkles size={14} aria-hidden="true" /> AI suggestion · check before saving
+          </span>
           <p>{proposal.summary}</p>
           <div>
             <button type="button" className="space-primary" disabled={busy} onClick={save}>

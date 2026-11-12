@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { BrainCircuit, Send, Trash2 } from 'lucide-react';
+import {
+  BrainCircuit,
+  PowerOff,
+  Send,
+  Sparkles,
+  Trash2,
+  User,
+} from 'lucide-react';
 import { apiRequest } from '../api.js';
 import { Field, SpaceHeading } from './shared.jsx';
 import { cloudConnectionSafe } from './ai-utils.js';
@@ -183,7 +190,9 @@ export default function PersonalAi({ onSessionExpired }) {
       setQuestion('');
       if (typeof result.remainingToday === 'number')
         setLifeos((previous) =>
-          previous ? { ...previous, remaining: result.remainingToday } : previous,
+          previous
+            ? { ...previous, remaining: result.remainingToday }
+            : previous,
         );
     });
   }
@@ -257,9 +266,26 @@ export default function PersonalAi({ onSessionExpired }) {
         </p>
       )}
       {lifeos?.available && <TellLifeOS onSessionExpired={onSessionExpired} />}
+      {lifeos && !lifeos.available && (
+        <div className="ai-off" role="note">
+          <span className="ai-off-icon" aria-hidden="true">
+            <PowerOff size={20} />
+          </span>
+          <div>
+            <strong>LifeOS AI is switched off on this server.</strong>
+            <p>
+              The free cloud AI and Tell LifeOS need a server key that is not
+              set yet. Everything else works. You can still ask with Local AI
+              (Ollama) or your own key below.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="ai-layout">
         <section className="ai-card">
-          <h2>Talk to your AI</h2>
+          <h2>
+            <BrainCircuit size={20} aria-hidden="true" /> Talk to your AI
+          </h2>
           {loading && <p role="status">Checking local AI...</p>}
           <form onSubmit={ask}>
             <fieldset disabled={busy || loading} className="ai-controls">
@@ -316,22 +342,22 @@ export default function PersonalAi({ onSessionExpired }) {
                 </div>
               )}
               {provider !== 'lifeos' && (
-              <Field label="Model ID">
-                <input
-                  required
-                  maxLength={300}
-                  value={models[provider]}
-                  list={provider === 'local' ? 'ai-local-models' : undefined}
-                  placeholder={
-                    provider === 'bedrock'
-                      ? 'Your Bedrock model or inference profile ID'
-                      : undefined
-                  }
-                  onChange={(event) =>
-                    setModels({ ...models, [provider]: event.target.value })
-                  }
-                />
-              </Field>
+                <Field label="Model ID">
+                  <input
+                    required
+                    maxLength={300}
+                    value={models[provider]}
+                    list={provider === 'local' ? 'ai-local-models' : undefined}
+                    placeholder={
+                      provider === 'bedrock'
+                        ? 'Your Bedrock model or inference profile ID'
+                        : undefined
+                    }
+                    onChange={(event) =>
+                      setModels({ ...models, [provider]: event.target.value })
+                    }
+                  />
+                </Field>
               )}
               <datalist id="ai-local-models">
                 {(status?.models ?? []).map((model) => (
@@ -446,6 +472,13 @@ export default function PersonalAi({ onSessionExpired }) {
           >
             {messages.map((entry, index) => (
               <article className={`ai-message ${entry.role}`} key={index}>
+                <span className="ai-avatar" aria-hidden="true">
+                  {entry.role === 'user' ? (
+                    <User size={15} />
+                  ) : (
+                    <Sparkles size={15} />
+                  )}
+                </span>
                 <strong>
                   {entry.role === 'user'
                     ? 'You'

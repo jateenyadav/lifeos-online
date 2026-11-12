@@ -1,4 +1,4 @@
-import { ArrowRight, Pencil, Trash2, X } from 'lucide-react';
+import { ArrowRight, Pencil, Sparkles, Trash2, X } from 'lucide-react';
 
 export function SpaceHeading({
   eyebrow,
@@ -22,19 +22,37 @@ export function SpaceHeading({
     </div>
   );
 }
-export function Stat({ label, value, detail, tone = '' }) {
+export function Stat({
+  label,
+  value,
+  detail,
+  tone = '',
+  icon: Icon,
+  space,
+  children,
+}) {
   return (
-    <div className={`space-stat ${tone}`}>
-      <span>{label}</span>
+    <div className={`space-stat ${tone}`} data-space={space}>
+      <span className="stat-label">
+        {Icon && (
+          <span className="stat-icon" aria-hidden="true">
+            <Icon size={16} />
+          </span>
+        )}
+        {label}
+      </span>
       <strong>{value}</strong>
       {detail && <small>{detail}</small>}
+      {children && <div className="stat-visual">{children}</div>}
     </div>
   );
 }
 export function Empty({ title, detail, action, onAction }) {
   return (
     <div className="space-empty">
-      <span className="empty-orbit">✧</span>
+      <span className="empty-orbit" aria-hidden="true">
+        <Sparkles size={22} />
+      </span>
       <h3>{title}</h3>
       <p>{detail}</p>
       {action && (
@@ -53,12 +71,17 @@ export function Field({ label, children }) {
     </label>
   );
 }
-export function Filters({ values, active, onChange }) {
+export function Filters({ values, active, onChange, colored = false }) {
   return (
-    <div className="space-filters" role="group" aria-label="Filter entries">
+    <div
+      className={`space-filters ${colored ? 'colored' : ''}`}
+      role="group"
+      aria-label="Filter entries"
+    >
       {values.map((value) => (
         <button
           key={value}
+          data-cat={colored ? value : undefined}
           aria-pressed={active === value}
           onClick={() => onChange(value)}
         >

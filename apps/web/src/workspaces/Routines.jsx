@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Check, Flame, Heart, Pill, Sparkles, Droplets } from 'lucide-react';
+import {
+  CalendarCheck,
+  Check,
+  Flame,
+  Heart,
+  Pill,
+  Sparkles,
+  Droplets,
+  Target,
+} from 'lucide-react';
 import {
   dateKey,
   dayNames,
@@ -72,16 +81,19 @@ export default function Routines({ store, create = false }) {
       />
       <div className="space-stats">
         <Stat
+          icon={CalendarCheck}
           label="Done for the day"
           value={`${done} / ${scheduled.length}`}
           detail="Only your scheduled routines"
         />
         <Stat
+          icon={Target}
           label="Daily progress"
           value={`${scheduled.length ? Math.round((done / scheduled.length) * 100) : 0}%`}
           detail="Small wins add up"
         />
         <Stat
+          icon={Flame}
           label="Best current streak"
           value={`${Math.max(0, ...routines.map((entry) => streak(entry)))} days`}
           detail="Counts scheduled days only"
@@ -195,11 +207,18 @@ export default function Routines({ store, create = false }) {
                 disabled={store.saving}
                 onClick={() => store.check(entry.id, date, !completed)}
               >
-                {completed ? <Check size={21} /> : <Icon size={21} />}
+                {completed ? (
+                  <Check size={22} strokeWidth={2.6} className="check-pop" />
+                ) : (
+                  <Icon size={21} />
+                )}
               </button>
               <div className="record-content">
-                <span className="record-tag">
-                  {entry.category} · {entry.time}
+                <span className="record-meta">
+                  <span className="record-tag">
+                    {entry.category} · {entry.time}
+                  </span>
+                  {completed && <span className="done-word">Done</span>}
                 </span>
                 <h2>{entry.title}</h2>
                 <div className="routine-history" aria-label="Last seven days">
@@ -215,9 +234,13 @@ export default function Routines({ store, create = false }) {
                             : ''
                       }
                     >
-                      {dayNames[new Date(`${day}T12:00:00`).getDay()].slice(
-                        0,
-                        1,
+                      {entry.completedDates.includes(day) ? (
+                        <Check size={12} strokeWidth={3} aria-hidden="true" />
+                      ) : (
+                        dayNames[new Date(`${day}T12:00:00`).getDay()].slice(
+                          0,
+                          1,
+                        )
                       )}
                     </span>
                   ))}

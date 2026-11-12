@@ -5,9 +5,16 @@ import {
   Dumbbell,
   Heart,
   NotebookPen,
+  Sun,
   Wallet,
 } from 'lucide-react';
-import { dateKey, dueOn, money, recentDays } from './utils.js';
+import {
+  dateKey,
+  dueOn,
+  expenseCategories,
+  money,
+  recentDays,
+} from './utils.js';
 import { Stat } from './shared.jsx';
 
 export default function Today({ store, user }) {
@@ -25,45 +32,62 @@ export default function Today({ store, user }) {
         entry.dueDate <= today,
     )
     .sort((first, second) => first.dueDate.localeCompare(second.dueDate));
+  const week = recentDays();
   const workouts = store.data.workouts.filter((entry) =>
-    recentDays().includes(entry.date),
+    week.includes(entry.date),
   );
-  const monthSpend = store.data.expenses
-    .filter((entry) => entry.date.startsWith(today.slice(0, 7)))
-    .reduce((sum, entry) => sum + entry.amountMinor, 0);
+  const monthExpenses = store.data.expenses.filter((entry) =>
+    entry.date.startsWith(today.slice(0, 7)),
+  );
+  const monthSpend = monthExpenses.reduce(
+    (sum, entry) => sum + entry.amountMinor,
+    0,
+  );
+  const byCategory = expenseCategories
+    .map((category) => ({
+      category,
+      amount: monthExpenses
+        .filter((entry) => entry.category === category)
+        .reduce((sum, entry) => sum + entry.amountMinor, 0),
+    }))
+    .filter((row) => row.amount > 0);
+  const budget = store.data.budgets.find(
+    (entry) => entry.month === today.slice(0, 7),
+  );
+  const routineShare = routines.length ? done / routines.length : 0;
   const quickActions = [
     {
       title: 'Catch a thought',
       subtitle: 'New note or reminder',
       href: '#notes/new',
       icon: NotebookPen,
-      tone: 'sage',
+      tone: 'notes',
     },
     {
       title: 'Make a little move',
       subtitle: 'Log your workout',
       href: '#workouts/new',
       icon: Dumbbell,
-      tone: 'peach',
+      tone: 'workouts',
     },
     {
       title: 'Keep a small promise',
       subtitle: 'Add a daily routine',
       href: '#routines/new',
       icon: Heart,
-      tone: 'lavender',
+      tone: 'routines',
     },
     {
       title: 'Know where it goes',
       subtitle: 'Add an expense',
       href: '#spending/new',
       icon: Wallet,
-      tone: 'sand',
+      tone: 'spending',
     },
   ];
   return (
     <>
-      <div className="today-hero">
+      <div className="today-hero" data-space="today">
         <div>
           <span className="space-eyebrow">YOUR DAY, A LITTLE LIGHTER</span>
           <h1>
@@ -79,7 +103,9 @@ export default function Today({ store, user }) {
           </div>
         </div>
         <div className="hero-art" aria-hidden="true">
-          <span>☀</span>
+          <span className="hero-sun">
+            <Sun size={34} strokeWidth={1.6} />
+          </span>
           <div>
             ONE DAY
             <br />
@@ -92,17 +118,88 @@ export default function Today({ store, user }) {
           label="Daily usuals"
           value={`${done} / ${routines.length}`}
           detail="Done today"
-        />
+          icon={Heart}
+          space="routines"
+        >
+          {routines.length > 0 && (
+            <span
+              className="ring-wrap"
+              role="img"
+              aria-label={`${Math.round(routineShare * 100)}% of today's routines done`}
+            >
+              <svg className="progress-ring" viewBox="0 0 44 44">
+                <circle cx="22" cy="22" r="18" />
+                {routineShare > 0 && (
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="18"
+                    pathLength="100"
+                    strokeDasharray={`${routineShare * 100} 100`}
+                  />
+                )}
+              </svg>
+              <span aria-hidden="true">{Math.round(routineShare * 100)}%</span>
+            </span>
+          )}
+        </Stat>
         <Stat
           label="Your movement"
           value={`${workouts.length} sessions`}
           detail="Last 7 days"
-        />
+          icon={Dumbbell}
+          space="workouts"
+        >
+          <ol className="week-dots" aria-label="Workout days, last 7 days">
+            {week.map((date) => {
+              const active = workouts.some((entry) => entry.date === date);
+              const day = new Date(`${date}T12:00:00`).toLocaleDateString(
+                'en-IN',
+                { weekday: 'short' },
+              );
+              return (
+                <li
+                  key={date}
+                  className={active ? 'on' : ''}
+                  title={`${day}: ${active ? 'worked out' : 'rest day'}`}
+                >
+                  <span className="sr-only">
+                    {day}: {active ? 'worked out' : 'rest day'}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </Stat>
         <Stat
           label="This month"
           value={money(monthSpend)}
-          detail="Spending · INR"
-        />
+          detail={
+            budget
+              ? `Spending · ${Math.round((monthSpend / budget.limitMinor) * 100)}% of budget`
+              : 'Spending · INR'
+          }
+          icon={Wallet}
+          space="spending"
+        >
+          {monthSpend > 0 && (
+            <div
+              className="month-bar"
+              role="img"
+              aria-label={`Spending by category: ${byCategory
+                .map((row) => `${row.category} ${money(row.amount)}`)
+                .join(', ')}`}
+            >
+              {byCategory.map((row) => (
+                <span
+                  key={row.category}
+                  data-cat={row.category}
+                  style={{ width: `${(row.amount / monthSpend) * 100}%` }}
+                />
+              ))}
+            </div>
+          )}
+        </Stat>
       </div>
       <div className="section-label">
         <h2>A little space for everything</h2>
@@ -115,7 +212,8 @@ export default function Today({ store, user }) {
             <a
               key={action.href}
               href={action.href}
-              className={`quick-space ${action.tone}`}
+              className="quick-space"
+              data-space={action.tone}
             >
               <span className="quick-icon">
                 <Icon size={23} />
@@ -128,7 +226,7 @@ export default function Today({ store, user }) {
         })}
       </div>
       <div className="today-columns">
-        <section className="today-checklist">
+        <section className="today-checklist" data-space="routines">
           <div className="section-label">
             <h2>Your daily usuals</h2>
             <a href="#routines">
@@ -169,7 +267,7 @@ export default function Today({ store, user }) {
             </div>
           )}
         </section>
-        <section className="today-reminders">
+        <section className="today-reminders" data-space="notes">
           <div className="section-label">
             <h2>On your mind</h2>
             <a href="#notes">

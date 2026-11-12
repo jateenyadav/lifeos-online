@@ -191,7 +191,7 @@ export default function MoneyHub({ store }) {
             Record payment
           </button>
           {pending.map((entry) => (
-            <article className="money-card" key={entry.id}>
+            <article className="money-card pending" key={entry.id}>
               <strong>{entry.title}</strong>
               <p>
                 {money(entry.amountMinor)} ·{' '}
@@ -220,17 +220,39 @@ export default function MoneyHub({ store }) {
           {payments
             .filter((entry) => entry.status === 'confirmed')
             .slice(0, 12)
-            .map((entry) => (
-              <article className="money-card" key={entry.id}>
-                <strong>
-                  {entry.title} · {money(entry.amountMinor)}
-                </strong>
-                <p>
-                  {paymentLabels[entry.kind]}
-                  {entry.person ? ` · ${entry.person}` : ''} · {entry.date}
-                </p>
-              </article>
-            ))}
+            .map((entry) => {
+              const flow =
+                entry.kind === 'self_transfer'
+                  ? 'neutral'
+                  : incomingKinds.includes(entry.kind)
+                    ? 'in'
+                    : 'out';
+              return (
+                <article
+                  className={`money-card payment-row flow-${flow}`}
+                  key={entry.id}
+                >
+                  <div>
+                    <strong>{entry.title}</strong>
+                    <p>
+                      {paymentLabels[entry.kind]}
+                      {entry.person ? ` · ${entry.person}` : ''} · {entry.date}
+                    </p>
+                  </div>
+                  <span className="payment-amount">
+                    <small>
+                      {flow === 'in'
+                        ? 'Money in'
+                        : flow === 'out'
+                          ? 'Money out'
+                          : 'Moved'}
+                    </small>
+                    {flow === 'in' ? '+' : flow === 'out' ? '−' : ''}
+                    {money(entry.amountMinor)}
+                  </span>
+                </article>
+              );
+            })}
           <p>
             Detected payments do not count as spending until you save them.
             Missing alerts can be recorded here.

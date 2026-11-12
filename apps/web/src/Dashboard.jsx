@@ -9,6 +9,7 @@ import {
   LogOut,
   NotebookPen,
   RefreshCw,
+  Sparkles,
   Wallet,
 } from 'lucide-react';
 import useWorkspace from './workspaces/useWorkspace.js';
@@ -74,7 +75,7 @@ export default function Dashboard({
   }, []);
 
   return (
-    <div className="workspace-shell">
+    <div className="workspace-shell" data-space={route.space}>
       <aside className="workspace-sidebar">
         <a className="workspace-brand" href="#today">
           <span>
@@ -90,9 +91,12 @@ export default function Dashboard({
               <a
                 key={space.id}
                 href={`#${space.id}`}
+                data-space={space.id}
                 aria-current={route.space === space.id ? 'page' : undefined}
               >
-                <Icon size={19} />
+                <span className="nav-icon" aria-hidden="true">
+                  <Icon size={17} />
+                </span>
                 <span>{space.title}</span>
                 {route.space === space.id && <span className="nav-dot" />}
               </a>
@@ -113,7 +117,9 @@ export default function Dashboard({
           </span>
           <div>
             <strong>{user.name}</strong>
-            <small>{user.provider === 'demo' ? 'Demo account' : user.email}</small>
+            <small>
+              {user.provider === 'demo' ? 'Demo account' : user.email}
+            </small>
             {onAccountDeleted && (
               <DeleteAccount user={user} onDeleted={onAccountDeleted} />
             )}
@@ -132,8 +138,9 @@ export default function Dashboard({
       <main className="workspace-main">
         {user.provider === 'demo' && (
           <p className="demo-banner" role="status">
-            You're in a demo account with sample data. Try anything; it's deleted
-            automatically within 24 hours.
+            <Sparkles size={16} aria-hidden="true" />
+            You're in a demo account with sample data. Try anything; it's
+            deleted automatically within 24 hours.
           </p>
         )}
         <header className="workspace-topbar">
@@ -188,9 +195,14 @@ export default function Dashboard({
           )}
           {store.loading ? (
             <div className="workspace-loading" role="status">
-              <Leaf size={26} />
-              <h2>Making a little room…</h2>
-              <p>Loading your saved spaces.</p>
+              <span className="sr-only">Loading your saved spaces.</span>
+              <div className="skeleton skeleton-hero" aria-hidden="true" />
+              <div className="skeleton-row" aria-hidden="true">
+                <div className="skeleton skeleton-card" />
+                <div className="skeleton skeleton-card" />
+                <div className="skeleton skeleton-card" />
+              </div>
+              <div className="skeleton skeleton-list" aria-hidden="true" />
             </div>
           ) : store.loaded ? (
             <Space
