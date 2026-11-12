@@ -1,0 +1,220 @@
+/*
+ * LifeOS design tokens.
+ * One sage brand scale, warm neutrals, and one accent scale per space.
+ * Every space scale has: surface (tint), border, strong (icon/text), button and chart.
+ * Light theme only: the web app has no dark mode yet.
+ */
+:root {
+  /* Sage brand */
+  --sage-50: #f2f7ee;
+  --sage-100: #e4efdc;
+  --sage-200: #cde2c1;
+  --sage-300: #a8c997;
+  --sage-400: #7eaa6b;
+  --sage-500: #5b8b4b;
+  --sage-600: #45703a;
+  --sage-700: #355a36;
+  --sage-800: #2a4837;
+  --sage-900: #1d3529;
+  --mint-100: #def3e8;
+  --mint-200: #c3e9d5;
+
+  /* Warm neutrals */
+  --cream-0: #fffdf8;
+  --cream-50: #fbfaf4;
+  --cream-100: #f5f3ea;
+  --cream-200: #ece9dc;
+  --line: #e3e3d4;
+  --line-strong: #cfd3bf;
+  --ink: #1f3329;
+  --ink-2: #3c5143;
+  --ink-3: #56695b;
+  --ink-4: #6b7a6c;
+
+  /* Status (always paired with a word or icon) */
+  --danger: #b03f27;
+  --danger-surface: #fdeee8;
+  --danger-border: #f2cfc2;
+  --warning: #8a5a10;
+  --warning-surface: #fff3dc;
+  --success: #2f7a4f;
+  --success-surface: #e5f4ea;
+  --income: #23774a;
+  --expense: #a8432a;
+
+  /* Notes: fresh green */
+  --notes-surface: #e8f5ec;
+  --notes-border: #c4e3cd;
+  --notes-strong: #2a7148;
+  --notes-button: #276a43;
+  --notes-chart: #3f9a63;
+
+  /* Workouts: warm peach */
+  --workouts-surface: #fdefe6;
+  --workouts-border: #f5d2bf;
+  --workouts-strong: #a84d26;
+  --workouts-button: #a34a23;
+  --workouts-chart: #e07a4a;
+
+  /* Routines: soft lavender */
+  --routines-surface: #f1edfa;
+  --routines-border: #dcd2f2;
+  --routines-strong: #5f45a6;
+  --routines-button: #5a3fa1;
+  --routines-chart: #8a6fd1;
+
+  /* Spending: golden sand */
+  --spending-surface: #fbf3de;
+  --spending-border: #eedba9;
+  --spending-strong: #845c10;
+  --spending-button: #855c0f;
+  --spending-chart: #d39a2a;
+
+  /* Personal AI: calm teal */
+  --ai-surface: #e5f3f5;
+  --ai-border: #bde0e6;
+  --ai-strong: #1c6676;
+  --ai-button: #1b6474;
+  --ai-chart: #2f97ab;
+
+  /* Spending categories (chips, list icons and charts) */
+  --cat-food: #e07a4a;
+  --cat-food-strong: #a5461f;
+  --cat-food-surface: #fdeee5;
+  --cat-travel: #2f97ab;
+  --cat-travel-strong: #1c6676;
+  --cat-travel-surface: #e3f3f6;
+  --cat-shopping: #8a6fd1;
+  --cat-shopping-strong: #5f45a6;
+  --cat-shopping-surface: #f0ecfa;
+  --cat-bills: #d39a2a;
+  --cat-bills-strong: #845c10;
+  --cat-bills-surface: #fbf2dc;
+  --cat-health: #d0577a;
+  --cat-health-strong: #a3304f;
+  --cat-health-surface: #fcebf0;
+  --cat-other: #8c9a8d;
+  --cat-other-strong: #4f5e52;
+  --cat-other-surface: #eef1ec;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  /* Shadow */
+  --shadow-xs: 0 1px 2px rgb(31 51 41 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(31 51 41 / 0.04), 0 4px 14px rgb(31 51 41 / 0.05);
+  --shadow-md: 0 2px 6px rgb(31 51 41 / 0.05), 0 12px 30px rgb(31 51 41 / 0.08);
+  --shadow-lg: 0 24px 60px rgb(31 51 41 / 0.16);
+
+  /* Type scale */
+  --font-display: Manrope, 'DM Sans', system-ui, sans-serif;
+  --font-text: 'DM Sans', system-ui, sans-serif;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --fast: 160ms;
+  --normal: 240ms;
+
+  /* Default space accent = sage (Today, sign-in) */
+  --space-surface: var(--sage-100);
+  --space-border: var(--sage-200);
+  --space-strong: var(--sage-700);
+  --space-button: var(--sage-800);
+  --space-chart: var(--sage-500);
+}
+
+/* Any element can pick up a space accent with data-space. */
+[data-space='today'] {
+  --space-surface: var(--sage-100);
+  --space-border: var(--sage-200);
+  --space-strong: var(--sage-700);
+  --space-button: var(--sage-800);
+  --space-chart: var(--sage-500);
+}
+[data-space='notes'] {
+  --space-surface: var(--notes-surface);
+  --space-border: var(--notes-border);
+  --space-strong: var(--notes-strong);
+  --space-button: var(--notes-button);
+  --space-chart: var(--notes-chart);
+}
+[data-space='workouts'] {
+  --space-surface: var(--workouts-surface);
+  --space-border: var(--workouts-border);
+  --space-strong: var(--workouts-strong);
+  --space-button: var(--workouts-button);
+  --space-chart: var(--workouts-chart);
+}
+[data-space='routines'] {
+  --space-surface: var(--routines-surface);
+  --space-border: var(--routines-border);
+  --space-strong: var(--routines-strong);
+  --space-button: var(--routines-button);
+  --space-chart: var(--routines-chart);
+}
+[data-space='spending'] {
+  --space-surface: var(--spending-surface);
+  --space-border: var(--spending-border);
+  --space-strong: var(--spending-strong);
+  --space-button: var(--spending-button);
+  --space-chart: var(--spending-chart);
+}
+[data-space='ai'] {
+  --space-surface: var(--ai-surface);
+  --space-border: var(--ai-border);
+  --space-strong: var(--ai-strong);
+  --space-button: var(--ai-button);
+  --space-chart: var(--ai-chart);
+}
+
+/* Category accents, same idea */
+[data-cat='Food'] {
+  --cat: var(--cat-food);
+  --cat-strong: var(--cat-food-strong);
+  --cat-surface: var(--cat-food-surface);
+}
+[data-cat='Travel'] {
+  --cat: var(--cat-travel);
+  --cat-strong: var(--cat-travel-strong);
+  --cat-surface: var(--cat-travel-surface);
+}
+[data-cat='Shopping'] {
+  --cat: var(--cat-shopping);
+  --cat-strong: var(--cat-shopping-strong);
+  --cat-surface: var(--cat-shopping-surface);
+}
+[data-cat='Bills'] {
+  --cat: var(--cat-bills);
+  --cat-strong: var(--cat-bills-strong);
+  --cat-surface: var(--cat-bills-surface);
+}
+[data-cat='Health'] {
+  --cat: var(--cat-health);
+  --cat-strong: var(--cat-health-strong);
+  --cat-surface: var(--cat-health-surface);
+}
+[data-cat='Other'] {
+  --cat: var(--cat-other);
+  --cat-strong: var(--cat-other-strong);
+  --cat-surface: var(--cat-other-surface);
+}
