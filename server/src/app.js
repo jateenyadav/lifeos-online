@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ApiError, createAuthService, hashToken } from './auth.js';
 import { createWorkspaceRouter } from './workspaces.js';
 import { createAiRouter } from './ai.js';
+import { createMoneyApiRouter } from './money/router.js';
 import { seedDemo } from './demo-data.js';
 
 const loginSchema = z.object({
@@ -61,8 +62,8 @@ export function createApp({
   sessions,
   verifyGoogle,
   workspaces,
+  money,
   aiKnowledge,
-  aiProviders,
   cloudAi,
   deleteAccountData,
   isDatabaseReady = () => true,
@@ -97,11 +98,17 @@ export function createApp({
       origin: (origin, callback) =>
         callback(null, !origin || config.webOrigins.includes(origin)),
       credentials: true,
-      methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     }),
   );
   app.use('/api/ai', express.json({ limit: '64kb' }));
-  app.use(express.json({ limit: '16kb' }));
+  const smallJson = express.json({ limit: '16kb' });
+  // Photo uploads are the one big body; the money router reads them itself after the session check.
+  app.use((request, response, next) =>
+    request.method === 'POST' && request.path === '/api/money/photos'
+      ? next()
+      : smallJson(request, response, next),
+  );
   app.use(cookieParser());
   app.use('/api', (_request, response, next) => {
     response.set('Cache-Control', 'no-store');
@@ -125,7 +132,9 @@ export function createApp({
   // instead (hashed, never the raw token); everything else by IP.
   const clientKey = (request) => {
     const token = tokenFrom(request);
-    return token ? `s:${hashToken(token).slice(0, 32)}` : ipKeyGenerator(request.ip ?? '');
+    return token
+      ? `s:${hashToken(token).slice(0, 32)}`
+      : ipKeyGenerator(request.ip ?? '');
   };
   app.use(
     '/api',
@@ -169,7 +178,9 @@ export function createApp({
       .slice(0, 254);
     return who ? `a:${who}` : `k:${clientKey(request)}`;
   });
-  const perNetwork = authLimit(100, (request) => ipKeyGenerator(request.ip ?? ''));
+  const perNetwork = authLimit(100, (request) =>
+    ipKeyGenerator(request.ip ?? ''),
+  );
   const loginLimiter = [perNetwork, perAccount];
   const sendSession = async (request, response, result) => {
     const previousToken = tokenFrom(request);
@@ -192,10 +203,13 @@ export function createApp({
     );
   });
   // "Try the demo": a private sample account for visitors (recruiters!) who don't want to sign up.
-  const demoLimiter = authLimit(30, (request) => `demo:${ipKeyGenerator(request.ip ?? '')}`);
+  const demoLimiter = authLimit(
+    30,
+    (request) => `demo:${ipKeyGenerator(request.ip ?? '')}`,
+  );
   app.post('/api/auth/demo', demoLimiter, async (request, response) => {
     const result = await auth.demo();
-    if (workspaces) await seedDemo(workspaces, result.user.id);
+    if (workspaces) await seedDemo(workspaces, result.user.id, money);
     await sendSession(request, response, result);
   });
   app.post('/api/auth/register', loginLimiter, async (request, response) => {
@@ -239,8 +253,8 @@ export function createApp({
     '/api/ai',
     createAiRouter({
       store: workspaces,
+      money,
       knowledge: aiKnowledge,
-      providers: aiProviders,
       ...(cloudAi ? { cloud: cloudAi } : {}),
       config,
       currentUser: (request) => auth.current(tokenFrom(request)),
@@ -253,10 +267,22 @@ export function createApp({
       currentUser: (request) => auth.current(tokenFrom(request)),
     }),
   );
+  app.use(
+    '/api/money',
+    createMoneyApiRouter({
+      store: money,
+      workspaces,
+      currentUser: (request) => auth.current(tokenFrom(request)),
+    }),
+  );
   app.use((_request, _response, next) =>
     next(new ApiError(404, 'API route not found.')),
   );
   app.use((error, _request, response, _next) => {
+    // Old clients read "message"; Money v2 clients read "error". Send both.
+    const json = response.json.bind(response);
+    response.json = (payload) =>
+      json(payload?.message ? { ...payload, error: payload.message } : payload);
     if (error instanceof z.ZodError)
       return response
         .status(400)

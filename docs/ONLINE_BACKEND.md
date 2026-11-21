@@ -6,7 +6,7 @@
 - The repository `jateenyadav/lifeos-online` is public. Secrets live only in Render and Netlify settings.
 - `WEB_ORIGINS` and the AI keys are `sync: false` in `render.yaml`, so a Blueprint sync never blanks them.
 - Optional "LifeOS AI": add `GROQ_API_KEY` and/or `GEMINI_API_KEY` in Render → lifeos-api → Environment.
-  Without them, Personal AI still works with local Ollama or your own OpenAI/Bedrock key.
+  Without them, the website hides Personal AI and Tell LifeOS until a key is added.
 
 ## 1. What the error means
 

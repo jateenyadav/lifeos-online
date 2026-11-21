@@ -9,6 +9,8 @@ import { hashToken } from '../src/auth.js';
 import { User, Session, mongoUsers, mongoSessions } from '../src/models.js';
 import { workspaceModels, mongoWorkspaces } from '../src/workspace-models.js';
 import { AiKnowledge, mongoAiKnowledge } from '../src/ai-models.js';
+import { moneyModels, mongoMoney } from '../src/money/store-mongo.js';
+import { createAccountDeletion } from '../src/account-deletion.js';
 
 test('password login, shared sessions, expiry and logout against real MongoDB', async () => {
   const uri =
@@ -470,11 +472,23 @@ test('AI knowledge persists privately and reads fresh tracker data from MongoDB'
       workspaces: mongoWorkspaces,
       aiKnowledge: mongoAiKnowledge,
       verifyGoogle: async () => {},
-      aiProviders: {
-        status: async () => ({ available: true, models: [] }),
+      cloudAi: {
+        available: () => true,
+        status: () => ({
+          available: true,
+          providers: ['test'],
+          dailyLimit: 30,
+          message: '',
+        }),
+        spend: async () => ({ used: 1, remaining: 29 }),
+        ai: {},
         answer: async (values) => {
           calls.push(values);
-          return 'Personal answer [S1]';
+          return {
+            text: 'Personal answer [S1]',
+            provider: 'test',
+            quota: { remaining: 29 },
+          };
         },
       },
     });
@@ -515,8 +529,8 @@ test('AI knowledge persists privately and reads fresh tracker data from MongoDB'
       },
     );
     const question = {
-      provider: 'local',
-      model: 'llama3.2:3b',
+      provider: 'lifeos',
+      cloudConsent: true,
       question: 'What skin care did I save?',
       topics: ['routines'],
     };
@@ -539,6 +553,226 @@ test('AI knowledge persists privately and reads fresh tracker data from MongoDB'
     for (const owner of owners) {
       await AiKnowledge.deleteMany({ userId: owner._id });
       await workspaceModels.routines.deleteMany({ userId: owner._id });
+      await Session.deleteMany({ userId: owner._id });
+      await User.deleteOne({ _id: owner._id });
+    }
+    await mongoose.disconnect();
+  }
+});
+
+test('Money v2 against real MongoDB: migration, ingest, khata, reimbursement, deletion', async () => {
+  const uri =
+    process.env.TEST_MONGODB_URI || 'mongodb://127.0.0.1:27017/lifeos_test';
+  if (!new URL(uri).pathname.slice(1).endsWith('_test'))
+    throw new Error(
+      'Integration tests require a database name ending in _test.',
+    );
+  let owner;
+  try {
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
+    await Promise.all(
+      [
+        User,
+        Session,
+        ...Object.values(workspaceModels),
+        ...Object.values(moneyModels),
+      ].map((model) => model.createIndexes()),
+    );
+    owner = await User.create({
+      name: 'Money learner',
+      email: `${randomUUID()}@example.com`,
+    });
+    const userId = String(owner._id);
+    const token = randomBytes(32).toString('base64url');
+    await Session.create({
+      userId: owner._id,
+      tokenHash: hashToken(token),
+      expiresAt: new Date(Date.now() + 60000),
+    });
+    // Old spending space rows that the lazy migration copies.
+    await mongoWorkspaces.create('expenses', userId, {
+      title: 'Old groceries',
+      date: '2026-10-03',
+      amountMinor: 128050,
+      category: 'Food',
+      payment: 'Card',
+      note: '',
+    });
+    await mongoWorkspaces.create('budgets', userId, {
+      month: '2026-10',
+      limitMinor: 2500000,
+    });
+    const app = createApp({
+      config: {
+        webOrigins: ['http://localhost:5173'],
+        sessionDays: 7,
+        cookieSameSite: 'lax',
+        production: false,
+        trustProxyHops: 0,
+      },
+      users: mongoUsers,
+      sessions: mongoSessions,
+      workspaces: mongoWorkspaces,
+      money: mongoMoney,
+      verifyGoogle: async () => {},
+    });
+    const call = (method, path, body) => {
+      const agent = request(app)[method](`/api/money${path}`);
+      const authed = agent
+        .set('X-Client-Type', 'mobile')
+        .set('Authorization', `Bearer ${token}`);
+      return body === undefined ? authed : authed.send(body);
+    };
+
+    const october = (await call('get', '/overview?month=2026-10').expect(200))
+      .body;
+    assert.equal(october.spentMinor, 128050);
+    assert.deepEqual(october.budget, {
+      limitMinor: 2500000,
+      usedMinor: 128050,
+    });
+    assert.ok((await User.findById(owner._id).lean()).moneyMigratedAt);
+    await call('get', '/overview').expect(200);
+    assert.equal(
+      await moneyModels.txns.countDocuments({ userId: owner._id }),
+      1,
+    );
+
+    // Old khata as opening balance, then Rohan's add-on card through phone capture.
+    await call('post', '/khata/import/save', {
+      people: [
+        { name: 'Rohan', choice: 'totalOnly', statedMinor: 3000000, lines: [] },
+      ],
+    }).expect(201);
+    await call('post', '/accounts', {
+      name: "Rohan's add-on card",
+      type: 'credit_card',
+      last4: '9191',
+      ownerName: 'Rohan',
+    }).expect(201);
+    const day = new Date().toISOString().slice(0, 10);
+    const item = {
+      sourceKey: `it-${randomUUID()}`,
+      source: 'sms',
+      date: day,
+      time: '10:00',
+      amountMinor: 1186400,
+      direction: 'debit',
+      title: 'IndiGo',
+      channel: 'Card',
+      last4: '9191',
+      utr: '987654321012',
+      confidence: 0.9,
+    };
+    const [created] = (
+      await call('post', '/txns/ingest', { items: [item] }).expect(200)
+    ).body.items;
+    assert.equal(created.status, 'created');
+    assert.equal(created.txn.peerTag, 'owe_owner');
+    const [again] = (
+      await call('post', '/txns/ingest', { items: [item] }).expect(200)
+    ).body.items;
+    assert.equal(again.status, 'duplicate');
+    const [merged] = (
+      await call('post', '/txns/ingest', {
+        items: [
+          {
+            ...item,
+            sourceKey: `it-${randomUUID()}`,
+            source: 'notification',
+            time: '10:01',
+          },
+        ],
+      }).expect(200)
+    ).body.items;
+    assert.deepEqual(
+      [merged.status, merged.txn.id],
+      ['merged', created.txn.id],
+    );
+    // The unique index keeps one row per sourceKey in MongoDB too.
+    await assert.rejects(
+      moneyModels.txns.create({
+        userId: owner._id,
+        date: day,
+        amountMinor: 1,
+        direction: 'debit',
+        sourceKey: item.sourceKey,
+      }),
+      (error) => error.code === 11000,
+    );
+
+    const khata = (await call('get', '/khata').expect(200)).body;
+    const rohan = khata.contacts.find((row) => row.contact.name === 'Rohan');
+    assert.equal(rohan.balance.actualMinor, -(3000000 + 1186400));
+    const detail = (
+      await call('get', `/khata/contacts/${rohan.contact.id}`).expect(200)
+    ).body;
+    assert.deepEqual(
+      detail.entries.map((entry) => entry.isOpening),
+      [false, true],
+    );
+
+    // Reimbursement: claim, office pays ₹15,000, only ₹3,136 is income.
+    await call('post', `/txns/${created.txn.id}/reimburse/claim`, {}).expect(
+      200,
+    );
+    const office = (
+      await call('post', '/txns', {
+        date: day,
+        amountMinor: 1500000,
+        direction: 'credit',
+        title: 'ACME',
+        category: 'Other income',
+      }).expect(201)
+    ).body.txn;
+    const received = (
+      await call('post', `/txns/${office.id}/reimburse/received`, {
+        claimIds: [created.txn.id],
+      }).expect(200)
+    ).body;
+    assert.deepEqual(
+      [received.matchedMinor, received.extraMinor],
+      [1186400, 313600],
+    );
+    const now = (await call('get', '/overview').expect(200)).body;
+    assert.deepEqual([now.spentMinor, now.incomeMinor], [0, 313600]);
+
+    // Photos are stored privately and come back as bytes.
+    const photo = (
+      await call('post', '/photos', {
+        ownerType: 'khata_contact',
+        ownerId: rohan.contact.id,
+        mime: 'image/jpeg',
+        data: Buffer.concat([
+          Buffer.from([0xff, 0xd8, 0xff]),
+          Buffer.alloc(30000),
+        ]).toString('base64'),
+      }).expect(201)
+    ).body;
+    const image = await call('get', `/photos/${photo.id}`).expect(200);
+    assert.equal(image.headers['content-type'], 'image/jpeg');
+
+    // Account deletion removes every Money v2 collection (needs a replica set for transactions).
+    const replicaSet = Boolean(
+      (await mongoose.connection.db.admin().command({ hello: 1 })).setName,
+    );
+    if (replicaSet) {
+      await createAccountDeletion()(owner._id);
+      for (const model of Object.values(moneyModels))
+        assert.equal(
+          await model.countDocuments({ userId: owner._id }),
+          0,
+          model.modelName,
+        );
+      owner = null;
+    }
+  } finally {
+    if (owner) {
+      for (const model of [
+        ...Object.values(moneyModels),
+        ...Object.values(workspaceModels),
+      ])
+        await model.deleteMany({ userId: owner._id });
       await Session.deleteMany({ userId: owner._id });
       await User.deleteOne({ _id: owner._id });
     }

@@ -229,9 +229,15 @@ test('registration rotates an existing mobile session', async () => {
 test('sign-in attempts are limited per account, without locking out other users', async () => {
   const { app } = fixture();
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    await mobileLogin(app, { identifier: 'target@example.com', password: 'wrong-password-123' }).expect(401);
+    await mobileLogin(app, {
+      identifier: 'target@example.com',
+      password: 'wrong-password-123',
+    }).expect(401);
   }
-  await mobileLogin(app, { identifier: 'target@example.com', password: 'wrong-password-123' }).expect(429);
+  await mobileLogin(app, {
+    identifier: 'target@example.com',
+    password: 'wrong-password-123',
+  }).expect(429);
   // Same network, different account: still allowed (web users share the proxy IP).
   await mobileRegister(app).expect(201);
 });
@@ -239,9 +245,15 @@ test('sign-in attempts are limited per account, without locking out other users'
 test('one network is capped at 100 sign-in attempts per 15 minutes', async () => {
   const { app } = fixture();
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    await mobileLogin(app, { identifier: `user${attempt}@example.com`, password: 'wrong-password-123' }).expect(401);
+    await mobileLogin(app, {
+      identifier: `user${attempt}@example.com`,
+      password: 'wrong-password-123',
+    }).expect(401);
   }
-  await mobileLogin(app, { identifier: 'new@example.com', password: 'wrong-password-123' }).expect(429);
+  await mobileLogin(app, {
+    identifier: 'new@example.com',
+    password: 'wrong-password-123',
+  }).expect(429);
 });
 
 test('mobile password login creates a hashed, revocable shared session', async () => {
@@ -559,15 +571,24 @@ test('a failed database ping returns 503 without exposing credentials', async ()
 test('Try the demo creates a private, temporary, pre-filled account', async () => {
   const created = [];
   const { app, storedUsers } = fixture();
-  const demo = await request(app).post('/api/auth/demo').set('X-Client-Type', 'mobile').expect(200);
+  const demo = await request(app)
+    .post('/api/auth/demo')
+    .set('X-Client-Type', 'mobile')
+    .expect(200);
   assert.equal(demo.body.user.provider, 'demo');
   assert.ok(demo.body.user.demoExpiresAt);
   const hours = (new Date(demo.body.user.demoExpiresAt) - Date.now()) / 3600000;
   assert.ok(hours > 23 && hours <= 24);
-  const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${demo.body.token}`).expect(200);
+  const me = await request(app)
+    .get('/api/auth/me')
+    .set('Authorization', `Bearer ${demo.body.token}`)
+    .expect(200);
   assert.equal(me.body.user.provider, 'demo');
   // Two visitors never share an account.
-  const second = await request(app).post('/api/auth/demo').set('X-Client-Type', 'mobile').expect(200);
+  const second = await request(app)
+    .post('/api/auth/demo')
+    .set('X-Client-Type', 'mobile')
+    .expect(200);
   assert.notEqual(second.body.user.id, demo.body.user.id);
   void created;
   void storedUsers;

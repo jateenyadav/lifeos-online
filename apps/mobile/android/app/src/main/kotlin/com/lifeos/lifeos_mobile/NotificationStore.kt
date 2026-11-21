@@ -50,43 +50,21 @@ object NotificationStore {
         write(context, state)
     }
 
-    @Synchronized fun configure(context: Context, userId: String?, token: String?, baseUrl: String) {
+    /** Only the signed-in user id is kept natively (no tokens): switching users clears everything. */
+    @Synchronized fun configure(context: Context, userId: String?): Boolean {
         val state = read(context)
-        if (userId == null || token == null || state.optString("userId") != userId) {
-            state.keys().asSequence().toList().forEach { state.remove(it) }
-        }
-        if (userId != null && token != null) {
-            state.put("userId", userId).put("token", token).put("baseUrl", baseUrl)
-        }
+        val changed = userId == null || state.optString("userId") != userId
+        if (changed) state.keys().asSequence().toList().forEach { state.remove(it) }
+        if (userId != null) state.put("userId", userId)
+        // Older versions kept a session token and raw pending items here.
+        state.remove("token"); state.remove("pending"); state.remove("seen"); state.remove("baseUrl")
         write(context, state)
+        return changed
     }
 
-    @Synchronized fun enqueue(context: Context, expense: JSONObject, postedAt: Long) {
+    @Synchronized fun markCaptured(context: Context) {
         val state = read(context)
-        if (!state.optBoolean("enabled") || postedAt < state.optLong("since") || state.optString("token").isBlank()) return
-        val pending = state.optJSONArray("pending") ?: JSONArray()
-        val seen = state.optJSONArray("seen") ?: JSONArray()
-        val key = expense.getString("notificationKey")
-        if ((0 until seen.length()).any { seen.getString(it) == key }) return
-        pending.put(expense)
-        seen.put(key)
-        while (seen.length() > 4000) seen.remove(0)
-        state.put("pending", pending).put("seen", seen)
-        write(context, state)
-    }
-
-    @Synchronized fun acknowledge(context: Context, userId: String, key: String) {
-        val state = read(context)
-        if (state.optString("userId") != userId) return
-        val pending = state.optJSONArray("pending") ?: JSONArray()
-        var removed = false
-        for (index in pending.length() - 1 downTo 0) {
-            if (pending.getJSONObject(index).getString("notificationKey") == key) {
-                pending.remove(index)
-                removed = true
-            }
-        }
-        state.put("pending", pending).put("saved", state.optInt("saved") + if (removed) 1 else 0).remove("error")
+        state.put("lastCapturedAt", System.currentTimeMillis())
         write(context, state)
     }
 }

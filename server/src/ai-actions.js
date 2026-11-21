@@ -1,13 +1,16 @@
 import { z } from 'zod';
 import { ApiError } from './auth.js';
 import { validate } from './workspaces.js';
+import { channels, expenseCategories } from './money/constants.js';
+import { ownMinor, periodTotals, spendDelta } from './money/ledger.js';
 
 /**
  * "Tell LifeOS": plain language → a real record, using tool calling.
- * "Spent 250 on lunch with Rahul" → an expense; "Remind me to call mom on Friday" → a reminder;
- * "How much did I spend on food this month?" → an answer from your own data.
+ * "Spent 250 on lunch with Rahul" → a Money transaction; "Remind me to call mom on Friday" → a
+ * reminder; "How much did I spend on food this month?" → an answer from your own Money data.
  * Writes are never saved here: the model can only PROPOSE one, the app shows it, and the user
- * confirms (the app then calls the normal create endpoint, with the normal validation).
+ * confirms. The app then POSTs proposal.values to `/api${proposal.path}` (the normal create
+ * endpoint, with the normal validation).
  */
 const requestSchema = z
   .object({
@@ -16,56 +19,107 @@ const requestSchema = z
   })
   .strict();
 
-const EXPENSE_CATEGORIES = ['Food', 'Travel', 'Shopping', 'Bills', 'Health', 'Other'];
-const PAYMENTS = ['UPI', 'Card', 'Wallet', 'Cash', 'Other'];
 const WORKOUT_TYPES = ['Strength', 'Cardio', 'Mobility', 'Other'];
+const day = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const parsed = new Date(`${value}T12:00:00Z`);
+    return (
+      !Number.isNaN(parsed.getTime()) &&
+      parsed.toISOString().slice(0, 10) === value
+    );
+  });
+// Same rules as POST /api/money/txns for the fields Tell LifeOS can fill.
+const txnSchema = z
+  .object({
+    date: day,
+    amountMinor: z.number().int().min(1).max(9999999999),
+    direction: z.literal('debit'),
+    title: z.string().trim().min(1).max(120),
+    category: z.enum(expenseCategories),
+    channel: z.enum(channels),
+    note: z.string().max(2000),
+  })
+  .strict();
 
 function propose(collection, values, summary) {
   // Same validation as the normal create endpoint, so a bad proposal is caught before the user sees it.
-  const parsed = validate(collection, values);
-  return { confirm: true, message: summary, preview: { collection, values: parsed, summary } };
+  const parsed =
+    collection === 'txns'
+      ? txnSchema.parse(values)
+      : validate(collection, values);
+  const path =
+    collection === 'txns' ? '/money/txns' : `/workspaces/${collection}`;
+  return {
+    confirm: true,
+    message: summary,
+    preview: { collection, path, values: parsed, summary },
+  };
 }
 
-const rupees = (minor) => `₹${(minor / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const rupees = (minor) =>
+  `₹${(minor / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
-export function createAiActions({ store, cloud }) {
+export function createAiActions({ money, cloud }) {
   const tools = (userId, today) => ({
     add_expense: {
-      description: 'Propose a new expense the user says they spent. Amount is in rupees.',
+      description:
+        'Propose money the user says they spent. Amount is in rupees.',
       parameters: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Short label, e.g. "Lunch with Rahul"' },
+          title: {
+            type: 'string',
+            description: 'Short label, e.g. "Lunch with Rahul"',
+          },
           amount: { type: 'number', description: 'Amount in rupees, e.g. 250' },
-          category: { type: 'string', enum: EXPENSE_CATEGORIES },
-          payment: { type: 'string', enum: PAYMENTS },
-          date: { type: 'string', description: `YYYY-MM-DD. Today is ${today}.` },
+          category: { type: 'string', enum: expenseCategories },
+          payment: { type: 'string', enum: channels },
+          date: {
+            type: 'string',
+            description: `YYYY-MM-DD. Today is ${today}.`,
+          },
           note: { type: 'string' },
         },
         required: ['title', 'amount', 'category', 'date'],
       },
       run: (a) => {
         const values = {
-          title: String(a.title ?? '').slice(0, 120),
           date: a.date,
           amountMinor: Math.round(Number(a.amount) * 100),
-          category: EXPENSE_CATEGORIES.includes(a.category) ? a.category : 'Other',
-          payment: PAYMENTS.includes(a.payment) ? a.payment : 'UPI',
+          direction: 'debit',
+          title: String(a.title ?? '').slice(0, 120),
+          category: expenseCategories.includes(a.category)
+            ? a.category
+            : 'Other',
+          channel: channels.includes(a.payment) ? a.payment : 'UPI',
           note: String(a.note ?? '').slice(0, 2000),
         };
-        return propose('expenses', values, `Add expense: ${values.title}, ${rupees(values.amountMinor)} (${values.category}) on ${values.date}?`);
+        return propose(
+          'txns',
+          values,
+          `Add expense: ${values.title}, ${rupees(values.amountMinor)} (${values.category}) on ${values.date}?`,
+        );
       },
     },
     add_note: {
-      description: 'Propose a note, or a reminder when the user wants to be reminded on a date.',
+      description:
+        'Propose a note, or a reminder when the user wants to be reminded on a date.',
       parameters: {
         type: 'object',
         properties: {
           title: { type: 'string' },
           body: { type: 'string' },
           kind: { type: 'string', enum: ['note', 'reminder'] },
-          dueDate: { type: 'string', description: `YYYY-MM-DD for reminders. Today is ${today}.` },
-          tag: { type: 'string', description: 'One word, e.g. Personal, Work, Health' },
+          dueDate: {
+            type: 'string',
+            description: `YYYY-MM-DD for reminders. Today is ${today}.`,
+          },
+          tag: {
+            type: 'string',
+            description: 'One word, e.g. Personal, Work, Health',
+          },
         },
         required: ['title', 'kind'],
       },
@@ -75,9 +129,15 @@ export function createAiActions({ store, cloud }) {
           body: String(a.body ?? '').slice(0, 10000),
           kind: a.kind === 'reminder' ? 'reminder' : 'note',
           tag: String(a.tag || 'Personal').slice(0, 40),
-          dueDate: a.kind === 'reminder' ? a.dueDate ?? today : null,
+          dueDate: a.kind === 'reminder' ? (a.dueDate ?? today) : null,
         };
-        return propose('notes', values, values.kind === 'reminder' ? `Add reminder: "${values.title}" on ${values.dueDate}?` : `Save note: "${values.title}"?`);
+        return propose(
+          'notes',
+          values,
+          values.kind === 'reminder'
+            ? `Add reminder: "${values.title}" on ${values.dueDate}?`
+            : `Save note: "${values.title}"?`,
+        );
       },
     },
     log_workout: {
@@ -88,7 +148,10 @@ export function createAiActions({ store, cloud }) {
           title: { type: 'string' },
           type: { type: 'string', enum: WORKOUT_TYPES },
           duration: { type: 'number', description: 'Minutes' },
-          date: { type: 'string', description: `YYYY-MM-DD. Today is ${today}.` },
+          date: {
+            type: 'string',
+            description: `YYYY-MM-DD. Today is ${today}.`,
+          },
           exercises: { type: 'string' },
           effort: { type: 'string', enum: ['Easy', 'Moderate', 'Hard'] },
         },
@@ -101,36 +164,61 @@ export function createAiActions({ store, cloud }) {
           type: WORKOUT_TYPES.includes(a.type) ? a.type : 'Other',
           duration: Math.round(Number(a.duration)),
           exercises: String(a.exercises ?? '').slice(0, 4000),
-          effort: ['Easy', 'Moderate', 'Hard'].includes(a.effort) ? a.effort : 'Moderate',
+          effort: ['Easy', 'Moderate', 'Hard'].includes(a.effort)
+            ? a.effort
+            : 'Moderate',
         };
-        return propose('workouts', values, `Log workout: ${values.title}, ${values.duration} min (${values.type}) on ${values.date}?`);
+        return propose(
+          'workouts',
+          values,
+          `Log workout: ${values.title}, ${values.duration} min (${values.type}) on ${values.date}?`,
+        );
       },
     },
     spending_summary: {
-      description: 'Read-only: total spending between two dates, by category. Use it to answer spending questions.',
+      description:
+        'Read-only: total spending between two dates, by category. Use it to answer spending questions.',
       parameters: {
         type: 'object',
         properties: {
           from: { type: 'string', description: 'YYYY-MM-DD (inclusive)' },
           to: { type: 'string', description: 'YYYY-MM-DD (inclusive)' },
-          category: { type: 'string', enum: EXPENSE_CATEGORIES },
+          category: { type: 'string', enum: expenseCategories },
         },
         required: ['from', 'to'],
       },
       run: async (a) => {
-        const rows = (await store.list('expenses', userId)).filter(
-          (e) => e.date >= a.from && e.date <= a.to && (!a.category || e.category === a.category),
-        );
+        // My own part only: friends' shares, refunds, reimbursements and transfers are left out.
+        if (!money)
+          return { error: 'Money is not available on this server yet.' };
+        const rows = (
+          await money.list('txns', userId, {
+            deleted: { $ne: true },
+            date: { $gte: a.from, $lte: a.to },
+          })
+        ).filter((t) => !a.category || t.category === a.category);
         const byCategory = {};
-        for (const e of rows) byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amountMinor;
-        const total = rows.reduce((sum, e) => sum + e.amountMinor, 0);
+        for (const t of rows) {
+          const delta = spendDelta(t);
+          if (delta)
+            byCategory[t.category] = (byCategory[t.category] ?? 0) + delta;
+        }
+        const totals = periodTotals(rows);
+        const spends = rows.filter((t) => spendDelta(t) > 0);
         return {
           from: a.from,
           to: a.to,
-          count: rows.length,
-          total: rupees(total),
-          byCategory: Object.fromEntries(Object.entries(byCategory).map(([k, v]) => [k, rupees(v)])),
-          biggest: rows.sort((x, y) => y.amountMinor - x.amountMinor).slice(0, 3).map((e) => `${e.title} ${rupees(e.amountMinor)} on ${e.date}`),
+          count: spends.length,
+          total: rupees(totals.spentMinor),
+          byCategory: Object.fromEntries(
+            Object.entries(byCategory)
+              .filter(([, v]) => v > 0)
+              .map(([k, v]) => [k, rupees(v)]),
+          ),
+          biggest: spends
+            .sort((x, y) => ownMinor(y) - ownMinor(x))
+            .slice(0, 3)
+            .map((t) => `${t.title} ${rupees(ownMinor(t))} on ${t.date}`),
         };
       },
     },
@@ -138,7 +226,8 @@ export function createAiActions({ store, cloud }) {
 
   return async function act(request) {
     const { message, today } = requestSchema.parse(request.body);
-    if (!cloud.available()) throw new ApiError(503, 'LifeOS AI is not set up on this server yet.');
+    if (!cloud.available())
+      throw new ApiError(503, 'LifeOS AI is not set up on this server yet.');
     const userId = request.aiUser.id;
     await cloud.spend(userId);
     const system = `You are LifeOS, a personal life assistant. Today is ${today} (YYYY-MM-DD). Amounts are Indian rupees.
@@ -156,13 +245,24 @@ export function createAiActions({ store, cloud }) {
         label: 'lifeos-act',
       });
       const failed = out.steps.find((s) => s.result?.error);
-      if (out.pending) return { reply: out.pending.preview.summary, proposal: out.pending.preview };
+      if (out.pending)
+        return {
+          reply: out.pending.preview.summary,
+          proposal: out.pending.preview,
+        };
       const succeeded = out.steps.some((s) => s.result && !s.result.error);
       if (failed && !succeeded)
-        return { reply: "I couldn't turn that into a valid entry. Try adding the amount, date or title." };
+        return {
+          reply:
+            "I couldn't turn that into a valid entry. Try adding the amount, date or title.",
+        };
       return { reply: out.text || 'Done.' };
     } catch (error) {
-      if (error?.status === 503) throw new ApiError(503, 'LifeOS AI is busy right now. Please try again in a minute.');
+      if (error?.status === 503)
+        throw new ApiError(
+          503,
+          'LifeOS AI is busy right now. Please try again in a minute.',
+        );
       throw error;
     }
   };

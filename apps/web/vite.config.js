@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { mockApi } from './src/dev/mock-api.js';
 
 export default defineConfig({
-  plugins: [react()],
+  // MOCK_API=1 serves a fake API from src/dev/mock-api.js (development only).
+  plugins: [react(), process.env.MOCK_API ? mockApi() : null].filter(Boolean),
   server: {
     port: 5173,
     strictPort: true,

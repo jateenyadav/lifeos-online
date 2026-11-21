@@ -1,21 +1,106 @@
 import 'package:flutter/material.dart';
+import '../money/api/money_api.dart';
+import '../money/core/money.dart';
+import '../money/ui/money_store.dart';
+import '../theme/tokens.dart';
+import '../widgets/avatar.dart';
+import '../widgets/lumi.dart';
+import '../widgets/ui.dart';
 import 'workspace_controller.dart';
-import 'shared.dart';
 import 'utils.dart';
 
-class TodaySpace extends StatelessWidget {
+enum TodayAction { note, routine, workout, payment, ai, money, notes, habits }
+
+/// One short, kind tip for Lumi to say.
+String lumiTip({
+  required DateTime now,
+  required int routinesLeft,
+  required int reminders,
+  required int reviewCount,
+  required bool overBudget,
+}) {
+  if (now.hour >= 23 || now.hour < 5) {
+    return 'It is late. The rest can wait for tomorrow.';
+  }
+  if (overBudget) {
+    return 'This month is over budget. One quiet no-spend day helps.';
+  }
+  if (reviewCount > 0) {
+    return '$reviewCount payment${reviewCount == 1 ? '' : 's'} need a quick look in Money.';
+  }
+  if (reminders > 0) {
+    return '$reminders reminder${reminders == 1 ? ' is' : 's are'} due. Pick the smallest one first.';
+  }
+  if (routinesLeft > 0) {
+    return '$routinesLeft little routine${routinesLeft == 1 ? '' : 's'} left today. You have got this.';
+  }
+  return 'All caught up. Enjoy a calm moment.';
+}
+
+class TodaySpace extends StatefulWidget {
   const TodaySpace({
     super.key,
     required this.store,
+    required this.money,
     required this.name,
-    required this.onOpen,
+    required this.onAction,
+    this.aiAvailable = false,
+    this.lumiEnabled = true,
+    this.avatarPair,
+    this.now,
   });
   final WorkspaceController store;
+  final MoneyStore? money;
   final String name;
-  final void Function(int, bool) onOpen;
+  final ValueChanged<TodayAction> onAction;
+  final bool aiAvailable;
+  final bool lumiEnabled;
+  final int? avatarPair;
+  final DateTime Function()? now;
+  @override
+  State<TodaySpace> createState() => _TodaySpaceState();
+}
+
+class _TodaySpaceState extends State<TodaySpace> {
+  Json? _overview;
+  bool _moneyLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.money?.addListener(_loadMoney);
+    _loadMoney();
+  }
+
+  @override
+  void dispose() {
+    widget.money?.removeListener(_loadMoney);
+    super.dispose();
+  }
+
+  Future<void> _loadMoney() async {
+    final money = widget.money;
+    if (money == null) {
+      setState(() => _moneyLoading = false);
+      return;
+    }
+    try {
+      final data = await money.api.overview(monthKey(DateTime.now()));
+      if (mounted) setState(() => _overview = data);
+    } catch (_) {
+      // Money is optional on Today; the Money space shows the error.
+    } finally {
+      if (mounted) setState(() => _moneyLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final today = dateKey();
+    final store = widget.store;
+    final now = (widget.now ?? DateTime.now)();
+    final c = context.lc;
+    final t = Theme.of(context).textTheme;
+    final today = dateKey(now);
     final routines = store.data['routines']!
         .where((entry) => dueOn(entry, today))
         .toList();
@@ -27,148 +112,194 @@ class TodaySpace extends StatelessWidget {
                   entry['kind'] == 'reminder' &&
                   entry['archived'] != true &&
                   entry['completed'] != true &&
-                  (entry['dueDate'] as String).compareTo(today) <= 0,
+                  (entry['dueDate'] as String? ?? '9').compareTo(today) <= 0,
             )
             .toList()
           ..sort(
-            (first, second) => (first['dueDate'] as String).compareTo(
-              second['dueDate'] as String,
-            ),
+            (a, b) =>
+                (a['dueDate'] as String).compareTo(b['dueDate'] as String),
           );
     final workouts = store.data['workouts']!
         .where((entry) => recentDays().contains(entry['date']))
         .length;
-    final spend = store.data['expenses']!
-        .where(
-          (entry) =>
-              (entry['date'] as String).startsWith(today.substring(0, 7)),
-        )
-        .fold<num>(0, (sum, entry) => sum + entry['amountMinor']);
+    final spent = asInt(_overview?['spentMinor']);
+    final budget = _overview?['budget'] as Map?;
+    final overBudget =
+        budget != null &&
+        asInt(budget['usedMinor']) > asInt(budget['limitMinor']);
+    final review = asInt(_overview?['reviewCount']);
+    final mood = lumiMoodFor(
+      now: now,
+      overBudget: overBudget,
+      overdue: reminders.any(
+        (r) => (r['dueDate'] as String).compareTo(today) < 0,
+      ),
+      streakOrBudgetOk: routines.isNotEmpty && done == routines.length,
+      loading: store.loading,
+    );
+    final greeting = now.hour < 12
+        ? 'Good morning'
+        : now.hour < 17
+        ? 'Good afternoon'
+        : 'Good evening';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SpaceCard(
-          tone: const Color(0xFFEEF3E6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(greeting, style: t.bodyMedium?.copyWith(color: c.muted)),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      widget.name.split(' ').first,
+                      style: t.headlineLarge,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            GeneratedAvatar(
+              name: widget.name,
+              pair: widget.avatarPair,
+              size: 48,
+              statusDot: true,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        LCard(
+          key: const Key('today_hero'),
+          hero: true,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
-                'YOUR DAY, A LITTLE LIGHTER',
-                style: TextStyle(fontSize: 9, letterSpacing: 1.3, color: muted),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Hello, ${name.split(' ').first}.',
-                style: const TextStyle(
-                  fontSize: 29,
-                  fontWeight: FontWeight.w600,
-                  color: ink,
+              if (widget.lumiEnabled) ...[
+                Lumi(mood: mood, size: 72),
+                const SizedBox(width: 14),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.lumiEnabled ? 'Lumi says' : 'Today',
+                      style: t.labelMedium?.copyWith(color: c.primary),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      lumiTip(
+                        now: now,
+                        routinesLeft: routines.length - done,
+                        reminders: reminders.length,
+                        reviewCount: review,
+                        overBudget: overBudget,
+                      ),
+                      key: const Key('lumi_tip'),
+                      style: t.titleMedium,
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 9),
-              const Text(
-                'No need to do it all. Start with one small thing.',
-                style: TextStyle(color: muted, height: 1.7, fontSize: 13),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                '${routines.length - done} routines left · ${reminders.length} reminders need a look',
-                style: const TextStyle(color: muted, fontSize: 11),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 10),
-        SpaceStats(
-          stats: [
-            ('Daily usuals', '$done / ${routines.length}'),
-            ('Sessions · 7 days', '$workouts'),
-            ('Spent this month', money(spend)),
+        StatGrid(
+          minWidth: 110,
+          children: [
+            StatTile(
+              label: 'Daily usuals',
+              value: '$done / ${routines.length}',
+              icon: Icons.favorite_border,
+              color: LifeColors.routines,
+            ),
+            StatTile(
+              label: 'Sessions · 7 days',
+              value: '$workouts',
+              icon: Icons.fitness_center_outlined,
+              color: LifeColors.workouts,
+            ),
+            StatTile(
+              key: const Key('today_spent'),
+              label: 'Spent this month',
+              value:
+                  widget.money == null || (_moneyLoading && _overview == null)
+                  ? '—'
+                  : Money.format(spent),
+              icon: Icons.account_balance_wallet_outlined,
+              color: LifeColors.money,
+            ),
           ],
         ),
-        const SectionTitle('A little space for everything'),
-        for (final action in [
-          (
-            1,
-            'Catch a thought',
-            'New note or reminder',
-            Icons.edit_note_outlined,
-            const Color(0xFFF0F4E7),
-          ),
-          (
-            2,
-            'Make a little move',
-            'Log your workout',
-            Icons.fitness_center_outlined,
-            const Color(0xFFFAF1E8),
-          ),
-          (
-            3,
-            'Keep a small promise',
-            'Add a daily routine',
-            Icons.favorite_border,
-            const Color(0xFFF2EFF7),
-          ),
-          (
-            4,
-            'Know where it goes',
-            'Add an expense',
-            Icons.account_balance_wallet_outlined,
-            const Color(0xFFF7F3E5),
-          ),
-        ])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Material(
-              color: action.$5,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => onOpen(action.$1, true),
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Row(
-                    children: [
-                      Icon(action.$4, color: muted),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              action.$2,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                                color: ink,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            Text(
-                              action.$3,
-                              style: const TextStyle(
-                                color: muted,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.arrow_outward, size: 18, color: muted),
-                    ],
-                  ),
-                ),
-              ),
+        const SectionTitle('Quick add'),
+        GridView.count(
+          crossAxisCount: MediaQuery.textScalerOf(context).scale(1) > 1.3
+              ? 1
+              : 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: MediaQuery.textScalerOf(context).scale(1) > 1.3
+              ? 4.2
+              : 2.3,
+          children: [
+            _Quick(
+              icon: Icons.edit_note_outlined,
+              color: LifeColors.notes,
+              title: 'Note',
+              onTap: () => widget.onAction(TodayAction.note),
+            ),
+            _Quick(
+              icon: Icons.account_balance_wallet_outlined,
+              color: LifeColors.money,
+              title: 'Payment',
+              onTap: () => widget.onAction(TodayAction.payment),
+            ),
+            _Quick(
+              icon: Icons.favorite_border,
+              color: LifeColors.routines,
+              title: 'Routine',
+              onTap: () => widget.onAction(TodayAction.routine),
+            ),
+            _Quick(
+              icon: Icons.fitness_center_outlined,
+              color: LifeColors.workouts,
+              title: 'Workout',
+              onTap: () => widget.onAction(TodayAction.workout),
+            ),
+          ],
+        ),
+        if (widget.aiAvailable) ...[
+          const SizedBox(height: 12),
+          LCard(
+            key: const Key('today_ai'),
+            onTap: () => widget.onAction(TodayAction.ai),
+            child: Row(
+              children: [
+                IconTile(Icons.auto_awesome, color: LifeColors.ai),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Ask LifeOS AI about your week')),
+                const Icon(Icons.chevron_right),
+              ],
             ),
           ),
+        ],
         const SectionTitle('Your daily usuals'),
         if (routines.isEmpty)
-          const SpaceEmpty(
+          const EmptyState(
             title: 'A routine you can return to.',
             detail: 'Add medicine, skin care, or any everyday habit.',
           ),
         for (final entry in routines)
-          SpaceCard(
+          LCard(
+            padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+            margin: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
                 Checkbox(
@@ -183,18 +314,15 @@ class TodaySpace extends StatelessWidget {
                     children: [
                       Text(
                         entry['title'],
-                        style: TextStyle(
-                          color: ink,
-                          fontWeight: FontWeight.w500,
+                        style: t.titleSmall?.copyWith(
                           decoration: isDone(entry, today)
                               ? TextDecoration.lineThrough
                               : null,
                         ),
                       ),
-                      const SizedBox(height: 5),
                       Text(
                         '${entry['time']} · ${entry['category']}',
-                        style: const TextStyle(color: muted, fontSize: 11),
+                        style: t.bodySmall,
                       ),
                     ],
                   ),
@@ -204,25 +332,26 @@ class TodaySpace extends StatelessWidget {
           ),
         const SectionTitle('On your mind'),
         if (reminders.isEmpty)
-          const SpaceEmpty(
+          const EmptyState(
             title: 'A little less to carry.',
             detail: 'No reminders are due. Capture an idea while it is fresh.',
           ),
         for (final entry in reminders.take(5))
-          SpaceCard(
+          LCard(
+            padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+            margin: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
-                const Icon(Icons.notifications_none_outlined, color: muted),
+                Icon(Icons.notifications_none_outlined, color: c.muted),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(entry['title'], style: const TextStyle(color: ink)),
-                      const SizedBox(height: 5),
+                      Text(entry['title'], style: t.titleSmall),
                       Text(
                         '${entry['dueDate']} · ${entry['tag']}',
-                        style: const TextStyle(color: muted, fontSize: 11),
+                        style: t.bodySmall,
                       ),
                     ],
                   ),
@@ -234,23 +363,64 @@ class TodaySpace extends StatelessWidget {
                       : () => store.save('notes', {
                           'completed': true,
                         }, id: entry['id']),
-                  icon: const Icon(Icons.check, color: muted),
+                  icon: const Icon(Icons.check),
                 ),
               ],
             ),
           ),
         if (reminders.length > 5)
           TextButton(
-            onPressed: () => onOpen(1, false),
+            onPressed: () => widget.onAction(TodayAction.notes),
             child: Text('See all ${reminders.length} reminders'),
           ),
-        const SizedBox(height: 20),
-        const Text(
+        const SizedBox(height: 16),
+        Text(
           'You do not need a perfect day to make a little progress.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: muted, fontSize: 11, height: 1.8),
+          style: t.bodySmall,
         ),
       ],
     );
   }
+}
+
+class SectionTitle extends StatelessWidget {
+  const SectionTitle(this.title, {super.key});
+  final String title;
+  @override
+  Widget build(BuildContext context) => SectionHeader(title);
+}
+
+class _Quick extends StatelessWidget {
+  const _Quick({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.onTap,
+  });
+  final IconData icon;
+  final Color color;
+  final String title;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => LCard(
+    margin: EdgeInsets.zero,
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    onTap: onTap,
+    child: Row(
+      children: [
+        IconTile(icon, color: color, size: 38),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Icon(Icons.add, size: 18, color: context.lc.muted),
+      ],
+    ),
+  );
 }

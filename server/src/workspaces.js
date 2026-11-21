@@ -125,7 +125,8 @@ export function createWorkspaceRouter({ store, currentUser }) {
     // everything when nothing changed (304 Not Modified, empty body).
     const etag = `"${createHash('sha1').update(body).digest('base64url')}"`;
     response.set('ETag', etag);
-    if (request.get('if-none-match') === etag) return response.status(304).end();
+    if (request.get('if-none-match') === etag)
+      return response.status(304).end();
     response.type('application/json').send(body);
   });
   router.use('/money', createMoneyRouter({ store }));

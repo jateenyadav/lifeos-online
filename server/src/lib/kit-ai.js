@@ -6,16 +6,28 @@
 import { createHash } from 'node:crypto';
 
 export class AiUnavailableError extends Error {
-  constructor(message = 'The AI is busy right now. Please try again in a minute.') {
+  constructor(
+    message = 'The AI is busy right now. Please try again in a minute.',
+  ) {
     super(message);
     this.status = 503;
   }
 }
 
 const PRESETS = {
-  groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
-  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', vision: true },
-  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+  groq: {
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'llama-3.3-70b-versatile',
+  },
+  gemini: {
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    model: 'gemini-2.5-flash',
+    vision: true,
+  },
+  openrouter: {
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'meta-llama/llama-3.3-70b-instruct:free',
+  },
 };
 
 /**
@@ -26,32 +38,54 @@ const PRESETS = {
 export function providersFromEnv(env = process.env) {
   const list = [];
   if (env.GROQ_API_KEY) {
-    list.push({ name: 'groq', ...PRESETS.groq, apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL || PRESETS.groq.model, visionModel: env.GROQ_VISION_MODEL || null });
+    list.push({
+      name: 'groq',
+      ...PRESETS.groq,
+      apiKey: env.GROQ_API_KEY,
+      model: env.GROQ_MODEL || PRESETS.groq.model,
+      visionModel: env.GROQ_VISION_MODEL || null,
+    });
   }
   if (env.GEMINI_API_KEY) {
     const model = env.GEMINI_MODEL || PRESETS.gemini.model;
-    list.push({ name: 'gemini', ...PRESETS.gemini, apiKey: env.GEMINI_API_KEY, model, visionModel: model });
+    list.push({
+      name: 'gemini',
+      ...PRESETS.gemini,
+      apiKey: env.GEMINI_API_KEY,
+      model,
+      visionModel: model,
+    });
   }
   if (env.OPENROUTER_API_KEY) {
-    list.push({ name: 'openrouter', ...PRESETS.openrouter, apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL || PRESETS.openrouter.model, visionModel: env.OPENROUTER_VISION_MODEL || null });
+    list.push({
+      name: 'openrouter',
+      ...PRESETS.openrouter,
+      apiKey: env.OPENROUTER_API_KEY,
+      model: env.OPENROUTER_MODEL || PRESETS.openrouter.model,
+      visionModel: env.OPENROUTER_VISION_MODEL || null,
+    });
   }
   return list;
 }
 
 /** Models often wrap JSON in ``` fences or add prose — pull out the JSON value. */
 export function extractJson(text) {
-  const cleaned = String(text ?? '').replace(/```(?:json)?/gi, '').trim();
+  const cleaned = String(text ?? '')
+    .replace(/```(?:json)?/gi, '')
+    .trim();
   try {
     return JSON.parse(cleaned);
   } catch {
     const start = cleaned.search(/[[{]/);
     const end = Math.max(cleaned.lastIndexOf('}'), cleaned.lastIndexOf(']'));
-    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+    if (start >= 0 && end > start)
+      return JSON.parse(cleaned.slice(start, end + 1));
     throw new Error('AI response was not JSON');
   }
 }
 
-const hashKey = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const hashKey = (value) =>
+  createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 /**
  * @param {object} opts
@@ -62,7 +96,14 @@ const hashKey = (value) => createHash('sha256').update(JSON.stringify(value)).di
  * @param {typeof fetch} [opts.fetch]
  * @param {string} [opts.appName]  sent to OpenRouter as X-Title
  */
-export function createAi({ providers = providersFromEnv(), timeoutMs = 30000, cache, log = () => {}, fetch: fetchImpl = globalThis.fetch, appName = 'app' } = {}) {
+export function createAi({
+  providers = providersFromEnv(),
+  timeoutMs = 30000,
+  cache,
+  log = () => {},
+  fetch: fetchImpl = globalThis.fetch,
+  appName = 'app',
+} = {}) {
   /** Providers able to serve this request, in try order. Images go to vision-capable models first. */
   function order(needsVision) {
     if (!needsVision) return providers.map((p) => ({ ...p, use: p.model }));
@@ -82,7 +123,12 @@ export function createAi({ providers = providersFromEnv(), timeoutMs = 30000, ca
         content: image
           ? [
               { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.base64}` } },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${image.mimeType};base64,${image.base64}`,
+                },
+              },
             ]
           : prompt,
       });
@@ -113,20 +159,44 @@ export function createAi({ providers = providersFromEnv(), timeoutMs = 30000, ca
   /** Try each provider until one returns a result that passes `accept` (which may throw). */
   async function withFallback(label, req, body, accept) {
     const list = order(Boolean(req.image));
-    if (!list.length) throw new AiUnavailableError(req.image ? 'No AI model that can read images is configured.' : 'AI is not configured on this server.');
+    if (!list.length)
+      throw new AiUnavailableError(
+        req.image
+          ? 'No AI model that can read images is configured.'
+          : 'AI is not configured on this server.',
+      );
     let lastError;
     for (const p of list) {
       const started = Date.now();
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? timeoutMs);
+      const timer = setTimeout(
+        () => controller.abort(),
+        req.timeoutMs ?? timeoutMs,
+      );
       try {
         const data = await callOnce(p, body, controller.signal);
         const result = accept(data, p);
-        log('info', { ai: label, provider: p.name, model: p.use, ms: Date.now() - started, ok: true });
+        log('info', {
+          ai: label,
+          provider: p.name,
+          model: p.use,
+          ms: Date.now() - started,
+          ok: true,
+        });
         return result;
       } catch (err) {
         lastError = err;
-        log('warn', { ai: label, provider: p.name, model: p.use, ms: Date.now() - started, ok: false, msg: err?.name === 'AbortError' ? 'timeout' : String(err?.message || err).slice(0, 200) });
+        log('warn', {
+          ai: label,
+          provider: p.name,
+          model: p.use,
+          ms: Date.now() - started,
+          ok: false,
+          msg:
+            err?.name === 'AbortError'
+              ? 'timeout'
+              : String(err?.message || err).slice(0, 200),
+        });
       } finally {
         clearTimeout(timer);
       }
@@ -155,7 +225,11 @@ export function createAi({ providers = providersFromEnv(), timeoutMs = 30000, ca
       withFallback(
         req.label || 'chat',
         req,
-        { messages: buildMessages(req), max_tokens: req.maxTokens ?? 1200, temperature: req.temperature ?? 0.4 },
+        {
+          messages: buildMessages(req),
+          max_tokens: req.maxTokens ?? 1200,
+          temperature: req.temperature ?? 0.4,
+        },
         (data, p) => {
           const text = data?.choices?.[0]?.message?.content;
           if (!text || !String(text).trim()) throw new Error('empty answer');
@@ -170,7 +244,8 @@ export function createAi({ providers = providersFromEnv(), timeoutMs = 30000, ca
    * output that doesn't match — then the next provider is tried.
    */
   async function json(schema, req) {
-    const system = `${req.system || ''}\n\nReply with ONLY valid JSON. No markdown, no commentary.`.trim();
+    const system =
+      `${req.system || ''}\n\nReply with ONLY valid JSON. No markdown, no commentary.`.trim();
     return cached(req, () =>
       withFallback(
         req.label || 'json',
@@ -182,8 +257,13 @@ export function createAi({ providers = providersFromEnv(), timeoutMs = 30000, ca
           response_format: { type: 'json_object' },
         },
         (data) => {
-          const parsed = schema.safeParse(extractJson(data?.choices?.[0]?.message?.content));
-          if (!parsed.success) throw new Error(`schema mismatch: ${parsed.error.issues[0]?.message ?? 'invalid'}`);
+          const parsed = schema.safeParse(
+            extractJson(data?.choices?.[0]?.message?.content),
+          );
+          if (!parsed.success)
+            throw new Error(
+              `schema mismatch: ${parsed.error.issues[0]?.message ?? 'invalid'}`,
+            );
           return parsed.data;
         },
       ),
@@ -196,7 +276,14 @@ export function createAi({ providers = providersFromEnv(), timeoutMs = 30000, ca
    * Returns { text, steps: [{tool, args, result}] }. Tool results are sent back to the model as JSON.
    * A tool can return { confirm: true, preview } to stop the loop and ask the user first.
    */
-  async function agent({ system, messages, tools, maxSteps = 4, label = 'agent', ctx }) {
+  async function agent({
+    system,
+    messages,
+    tools,
+    maxSteps = 4,
+    label = 'agent',
+    ctx,
+  }) {
     const toolDefs = Object.entries(tools).map(([name, t]) => ({
       type: 'function',
       function: { name, description: t.description, parameters: t.parameters },
@@ -204,36 +291,74 @@ export function createAi({ providers = providersFromEnv(), timeoutMs = 30000, ca
     const convo = buildMessages({ system, messages });
     const steps = [];
     for (let i = 0; i < maxSteps; i++) {
-      const msg = await withFallback(label, {}, { messages: convo, tools: toolDefs, tool_choice: 'auto', max_tokens: 1200, temperature: 0.2 }, (data) => {
-        const m = data?.choices?.[0]?.message;
-        if (!m) throw new Error('empty answer');
-        return m;
-      });
+      const msg = await withFallback(
+        label,
+        {},
+        {
+          messages: convo,
+          tools: toolDefs,
+          tool_choice: 'auto',
+          max_tokens: 1200,
+          temperature: 0.2,
+        },
+        (data) => {
+          const m = data?.choices?.[0]?.message;
+          if (!m) throw new Error('empty answer');
+          return m;
+        },
+      );
       const calls = msg.tool_calls || [];
-      if (!calls.length) return { text: String(msg.content || '').trim(), steps };
-      convo.push({ role: 'assistant', content: msg.content || '', tool_calls: calls });
+      if (!calls.length)
+        return { text: String(msg.content || '').trim(), steps };
+      convo.push({
+        role: 'assistant',
+        content: msg.content || '',
+        tool_calls: calls,
+      });
       for (const call of calls) {
         const tool = tools[call.function?.name];
         let args = {};
-        try { args = JSON.parse(call.function?.arguments || '{}'); } catch { /* bad args → tool sees {} */ }
+        try {
+          args = JSON.parse(call.function?.arguments || '{}');
+        } catch {
+          /* bad args → tool sees {} */
+        }
         let result;
         if (!tool) result = { error: 'unknown tool' };
         else {
-          try { result = await tool.run(args, ctx); } catch (err) { result = { error: String(err?.message || err) }; }
+          try {
+            result = await tool.run(args, ctx);
+          } catch (err) {
+            result = { error: String(err?.message || err) };
+          }
         }
         steps.push({ tool: call.function?.name, args, result });
-        if (result && result.confirm) return { text: result.message || '', steps, pending: result };
-        convo.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result).slice(0, 12000) });
+        if (result && result.confirm)
+          return { text: result.message || '', steps, pending: result };
+        convo.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify(result).slice(0, 12000),
+        });
       }
     }
-    return { text: 'I could not finish that in a few steps. Try asking in a simpler way.', steps };
+    return {
+      text: 'I could not finish that in a few steps. Try asking in a simpler way.',
+      steps,
+    };
   }
 
   return {
     chat,
     json,
     agent,
-    status: () => ({ providers: providers.map((p) => ({ name: p.name, model: p.model, vision: Boolean(p.visionModel) })) }),
+    status: () => ({
+      providers: providers.map((p) => ({
+        name: p.name,
+        model: p.model,
+        vision: Boolean(p.visionModel),
+      })),
+    }),
     configured: () => providers.length > 0,
   };
 }

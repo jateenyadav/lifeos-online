@@ -4,16 +4,27 @@ import { User, Session, mongoUsers, mongoSessions } from './models.js';
 import { createGoogleVerifier } from './auth.js';
 import { createApp } from './app.js';
 import { workspaceModels, mongoWorkspaces } from './workspace-models.js';
-import { AiKnowledge, AiUsage, mongoAiKnowledge, mongoAiUsage } from './ai-models.js';
+import {
+  AiKnowledge,
+  AiUsage,
+  mongoAiKnowledge,
+  mongoAiUsage,
+} from './ai-models.js';
 import { createCloudAi } from './ai-cloud.js';
 import { createAccountDeletion } from './account-deletion.js';
+import { moneyModels, mongoMoney } from './money/store-mongo.js';
 
 const config = readConfig();
 await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 10000 });
 await Promise.all(
-  [User, Session, AiKnowledge, AiUsage, ...Object.values(workspaceModels)].map((model) =>
-    model.createIndexes(),
-  ),
+  [
+    User,
+    Session,
+    AiKnowledge,
+    AiUsage,
+    ...Object.values(workspaceModels),
+    ...Object.values(moneyModels),
+  ].map((model) => model.createIndexes()),
 );
 const deleteAccountData = createAccountDeletion();
 const app = createApp({
@@ -21,6 +32,7 @@ const app = createApp({
   users: mongoUsers,
   sessions: mongoSessions,
   workspaces: mongoWorkspaces,
+  money: mongoMoney,
   aiKnowledge: mongoAiKnowledge,
   cloudAi: createCloudAi({ ...config.cloudAi, usage: mongoAiUsage }),
   deleteAccountData,
@@ -48,7 +60,8 @@ async function sweepDemoAccounts() {
   try {
     const ids = await mongoUsers.expiredDemoIds();
     for (const id of ids) await deleteAccountData(id).catch(() => {});
-    if (ids.length) console.log(`Removed ${ids.length} expired demo account(s).`);
+    if (ids.length)
+      console.log(`Removed ${ids.length} expired demo account(s).`);
   } catch (error) {
     console.error(`Demo sweep failed: ${error.message}`);
   }

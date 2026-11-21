@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App.jsx';
+import { createFakeMoney } from '../dev/fake-money.js';
 
 const user = {
   id: 'user-1',
@@ -23,15 +24,21 @@ beforeEach(() => {
     'fetch',
     vi.fn().mockImplementation((path) =>
       Promise.resolve(
-        path === '/api/workspaces'
-          ? jsonResponse({
-              notes: [],
-              workouts: [],
-              routines: [],
-              expenses: [],
-              budgets: [],
-            })
-          : jsonResponse({ message: 'Please sign in.' }, 401),
+        path === '/api/ai/status'
+          ? jsonResponse({ lifeos: { available: false } })
+          : String(path).startsWith('/api/money/')
+            ? jsonResponse(
+                createFakeMoney({ seed: false }).handle('GET', path).body,
+              )
+            : path === '/api/workspaces'
+              ? jsonResponse({
+                  notes: [],
+                  workouts: [],
+                  routines: [],
+                  expenses: [],
+                  budgets: [],
+                })
+              : jsonResponse({ message: 'Please sign in.' }, 401),
       ),
     ),
   );
@@ -142,7 +149,7 @@ test('logs in using the shared API and signs out', async () => {
     within(screen.getByRole('navigation', { name: 'Workspaces' })).getAllByRole(
       'link',
     ),
-  ).toHaveLength(6);
+  ).toHaveLength(5);
   expect(fetch).toHaveBeenCalledWith(
     '/api/auth/login',
     expect.objectContaining({
@@ -154,6 +161,9 @@ test('logs in using the shared API and signs out', async () => {
     }),
   );
   fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+  await interactions.click(
+    screen.getByRole('button', { name: 'Account menu' }),
+  );
   await interactions.click(screen.getByRole('button', { name: 'Sign out' }));
   expect(
     await screen.findByRole('button', { name: 'Sign in', exact: true }),
@@ -198,11 +208,12 @@ test('hides workspaces after logout and restores the selected space on the next 
   const interactions = userEvent.setup();
   fetch.mockResolvedValueOnce(jsonResponse({ user }));
   render(<App />);
-  await screen.findByRole('link', { name: 'Spending tracker' });
-  await interactions.click(
-    screen.getByRole('link', { name: 'Spending tracker' }),
-  );
+  await screen.findByRole('link', { name: 'Money' });
+  await interactions.click(screen.getByRole('link', { name: 'Money' }));
   fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+  await interactions.click(
+    screen.getByRole('button', { name: 'Account menu' }),
+  );
   await interactions.click(screen.getByRole('button', { name: 'Sign out' }));
   await screen.findByRole('button', { name: 'Sign in', exact: true });
   expect(
@@ -219,7 +230,7 @@ test('hides workspaces after logout and restores the selected space on the next 
   );
   expect(
     await screen.findByRole('heading', {
-      name: 'Spending tracker',
+      name: 'Money',
       exact: true,
     }),
   ).toBeInTheDocument();
@@ -303,7 +314,7 @@ test('sends the Google identity token to the backend and signs out', async () =>
     within(screen.getByRole('navigation', { name: 'Workspaces' })).getAllByRole(
       'link',
     ),
-  ).toHaveLength(6);
+  ).toHaveLength(5);
   expect(fetch).toHaveBeenCalledWith(
     '/api/auth/google',
     expect.objectContaining({
@@ -313,6 +324,9 @@ test('sends the Google identity token to the backend and signs out', async () =>
     }),
   );
   fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+  await interactions.click(
+    screen.getByRole('button', { name: 'Account menu' }),
+  );
   await interactions.click(screen.getByRole('button', { name: 'Sign out' }));
   expect(
     await screen.findByRole('button', { name: 'Sign in', exact: true }),
@@ -385,7 +399,7 @@ test('registers with email and signs into the new account immediately', async ()
     within(screen.getByRole('navigation', { name: 'Workspaces' })).getAllByRole(
       'link',
     ),
-  ).toHaveLength(6);
+  ).toHaveLength(5);
   expect(fetch).toHaveBeenCalledWith(
     '/api/auth/register',
     expect.objectContaining({
@@ -400,6 +414,9 @@ test('registers with email and signs into the new account immediately', async ()
     }),
   );
   fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+  await interactions.click(
+    screen.getByRole('button', { name: 'Account menu' }),
+  );
   await interactions.click(screen.getByRole('button', { name: 'Sign out' }));
   expect(
     await screen.findByRole('button', { name: 'Sign in', exact: true }),

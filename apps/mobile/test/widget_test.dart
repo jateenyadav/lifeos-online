@@ -219,7 +219,7 @@ void main() {
     await tester.ensureVisible(find.text('Sign in'));
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
-    expect(find.text('Hello, LifeOS.'), findsOneWidget);
+    expect(find.byKey(const Key('today_hero')), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
   });
 
@@ -297,7 +297,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('Create account').hitTestable(), findsOneWidget);
-    expect(find.text('lifeOS.').hitTestable(), findsOneWidget);
+    expect(find.text('LifeOS').hitTestable(), findsOneWidget);
   });
 
   testWidgets('mode changes and validation reveal the top of the form', (

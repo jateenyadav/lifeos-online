@@ -20,7 +20,6 @@
     "dev:web": "npm run dev -w apps/web",
     "dev:mobile": "cd apps/mobile && flutter run --dart-define-from-file=config/development.json",
     "build:android": "npm run api:check && cd apps/mobile && flutter build apk --release --dart-define-from-file=config/production.json",
-    "ai:check": "node scripts/check-local-ai.mjs",
     "db:up": "docker compose up -d mongo",
     "db:down": "docker compose stop mongo",
     "seed": "npm run seed -w server",

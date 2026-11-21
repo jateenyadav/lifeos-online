@@ -1,34 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
-  BrainCircuit,
   Check,
   Dumbbell,
   Eye,
   EyeOff,
   Heart,
-  Leaf,
   LockKeyhole,
   Monitor,
   NotebookPen,
   Smartphone,
   Sparkles,
-  Sun,
   Wallet,
 } from 'lucide-react';
 import { apiRequest } from './api.js';
 import GoogleButton from './GoogleButton.jsx';
 import Dashboard from './Dashboard.jsx';
+import Lumi from './ui/Lumi.jsx';
+import ThemeToggle from './ui/ThemeToggle.jsx';
+import { useTheme } from './ui/prefs.js';
 
 function Brand() {
   return (
     <a className="brand" href="/" aria-label="LifeOS home">
-      <span className="brand-icon">
-        <Leaf size={22} strokeWidth={1.7} />
+      <span className="brand-mark" aria-hidden="true">
+        <Sparkles size={18} />
       </span>
-      <span>
-        life<span className="brand-os">OS</span>
-        <span className="brand-dot">.</span>
+      <span className="brand-word">
+        life<b>OS</b>
       </span>
     </a>
   );
@@ -38,8 +37,7 @@ const previewSpaces = [
   { id: 'notes', label: 'Notes & reminders', icon: NotebookPen },
   { id: 'workouts', label: 'Workouts', icon: Dumbbell },
   { id: 'routines', label: 'Routines', icon: Heart },
-  { id: 'spending', label: 'Spending', icon: Wallet },
-  { id: 'ai', label: 'Personal AI', icon: BrainCircuit },
+  { id: 'money', label: 'Money & khata', icon: Wallet },
 ];
 
 function SpaceChips({ className = '' }) {
@@ -68,8 +66,8 @@ function StoryPanel() {
           what <em>matters.</em>
         </h1>
         <p className="story-description">
-          Notes, workouts, routines, spending and a personal AI that turns a
-          sentence into an entry. One account for web, Android and iOS.
+          Notes, workouts, habits, money and khata in one calm place. One
+          account for the web and your phone.
         </p>
         <SpaceChips />
         <div className="illustration" aria-hidden="true">
@@ -82,9 +80,7 @@ function StoryPanel() {
                   Hello, there<span>.</span>
                 </strong>
               </div>
-              <span className="preview-sun">
-                <Sun size={22} />
-              </span>
+              <Lumi mood="happy" size={64} className="preview-lumi" />
             </div>
             <div className="preview-stats">
               <div className="preview-stat" data-space="routines">
@@ -128,11 +124,11 @@ function StoryPanel() {
               <span className="preview-tag">Evening</span>
             </div>
           </div>
-          <div className="floating-note preview-spend" data-space="spending">
+          <div className="floating-note preview-spend" data-space="money">
             <span className="preview-spend-head">
-              <Wallet size={14} /> This month
+              <Wallet size={14} /> Spent this month
             </span>
-            <strong>₹6,848.50</strong>
+            <strong>₹46,848</strong>
             <span className="preview-bar">
               <i data-cat="Shopping" style={{ width: '51%' }} />
               <i data-cat="Food" style={{ width: '25%' }} />
@@ -141,17 +137,18 @@ function StoryPanel() {
               <i data-cat="Health" style={{ width: '5%' }} />
             </span>
           </div>
-          <div className="floating-device preview-tell" data-space="ai">
+          <div className="floating-device preview-tell" data-space="money">
             <span className="preview-tell-head">
-              <Sparkles size={14} /> Tell LifeOS
+              <Wallet size={14} /> Khata
             </span>
-            <p className="preview-bubble you">Spent 250 on lunch</p>
-            <p className="preview-bubble ai">
-              Add expense: Lunch, ₹250 (Food)?
+            <p className="preview-khata">
+              <span>Rahul owes you</span>
+              <b>₹2,500</b>
             </p>
-            <span className="preview-save">
-              <Check size={12} /> Save
-            </span>
+            <p className="preview-khata">
+              <span>You owe Priya</span>
+              <b className="out">₹1,500</b>
+            </p>
           </div>
         </div>
         <div className="platform-list">
@@ -160,9 +157,6 @@ function StoryPanel() {
           </span>
           <span>
             <Smartphone size={15} /> Android
-          </span>
-          <span>
-            <Smartphone size={15} /> iOS
           </span>
           <span className="platform-divider" />
           <span>One account, one place for your day</span>
@@ -214,6 +208,7 @@ async function restoreSession(signal) {
 }
 
 export default function App() {
+  useTheme();
   const contentRef = useRef(null);
   const errorRef = useRef(null);
   const [user, setUser] = useState(null);
@@ -357,17 +352,15 @@ export default function App() {
         <span className="header-note">
           A little more life. A little less noise.
         </span>
-        <span className="header-badge">
-          <span className="status-dot" /> YOUR PERSONAL SPACE
-        </span>
+        <ThemeToggle />
       </header>
       {
         <div className="main-grid">
           <StoryPanel />
           <section className="login-panel" aria-label="Account sign-in">
             <div className="login-content" ref={contentRef}>
-              <div className="welcome-icon">
-                <Leaf size={25} strokeWidth={1.5} />
+              <div className="welcome-icon" aria-hidden="true">
+                <Sparkles size={22} />
               </div>
               <span className="eyebrow login-eyebrow">
                 {registering
@@ -377,7 +370,7 @@ export default function App() {
               <h2>{registering ? 'A fresh start.' : 'Welcome back.'}</h2>
               <p className="login-description">
                 {registering
-                  ? 'Create one account for web, Android, and iOS.'
+                  ? 'Create one account for the web and Android.'
                   : 'Your space is waiting. Come on in.'}
               </p>
               <SpaceChips className="login-chips" />

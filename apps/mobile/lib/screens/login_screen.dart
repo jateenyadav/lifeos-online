@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import '../widgets/lumi.dart';
 import '../auth/auth_controller.dart';
-
-const _ink = Color(0xFF263E34);
-const _muted = Color(0xFF697562);
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.controller});
@@ -91,9 +91,9 @@ class _LoginScreenState extends State<LoginScreen> {
     padding: const EdgeInsets.only(bottom: 9),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
-        color: Color(0xFF53654C),
+        color: context.lc.muted,
         fontWeight: FontWeight.w500,
       ),
     ),
@@ -189,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
                     size: 20,
-                    color: _muted,
+                    color: context.lc.muted,
                   ),
                 ),
               ),
@@ -225,26 +225,33 @@ class _LoginScreenState extends State<LoginScreen> {
                     value != _password.text ? 'Passwords do not match.' : null,
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Use at least 8 characters. Maximum 72 bytes.',
-                style: TextStyle(fontSize: 12, color: _muted),
+                style: TextStyle(fontSize: 12, color: context.lc.muted),
               ),
             ],
             const SizedBox(height: 14),
-            const Row(
+            Row(
               children: [
-                Icon(Icons.lock_outline_rounded, size: 12, color: _muted),
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 12,
+                  color: context.lc.muted,
+                ),
                 SizedBox(width: 5),
                 Expanded(
                   child: Text(
                     'Your session stays private on this device.',
-                    style: TextStyle(fontSize: 12, color: _muted),
+                    style: TextStyle(fontSize: 12, color: context.lc.muted),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 26),
             FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+              ),
               onPressed: disabled ? null : _submit,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -261,12 +268,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(width: 14),
                   if (auth.busy)
-                    const SizedBox(
+                    SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Color(0xFFF9FBF5),
+                        color: context.lc.primaryInk,
                       ),
                     )
                   else
@@ -285,9 +292,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Row(
+            Row(
               children: [
-                Expanded(child: Divider(color: Color(0xFFE5E9DF))),
+                Expanded(child: Divider(color: context.lc.border)),
                 Flexible(
                   flex: 4,
                   child: Padding(
@@ -295,11 +302,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Text(
                       'or keep it simple',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: _muted),
+                      style: TextStyle(fontSize: 12, color: context.lc.muted),
                     ),
                   ),
                 ),
-                Expanded(child: Divider(color: Color(0xFFE5E9DF))),
+                Expanded(child: Divider(color: context.lc.border)),
               ],
             ),
             const SizedBox(height: 20),
@@ -321,13 +328,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
-                side: const BorderSide(color: Color(0xFFDFE4D7)),
+                side: BorderSide(color: context.lc.border),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 14,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
               child: const Row(
@@ -353,17 +360,25 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             if (!auth.google.configured) ...[
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Google setup is incomplete.\nTap Continue with Google for the next step.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: _muted, height: 1.7),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.lc.muted,
+                  height: 1.7,
+                ),
               ),
             ],
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Google creates your account on your first sign-in.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: _muted, height: 1.7),
+              style: TextStyle(
+                fontSize: 12,
+                color: context.lc.muted,
+                height: 1.7,
+              ),
             ),
           ],
         ),
@@ -376,28 +391,17 @@ class _LoginScreenState extends State<LoginScreen> {
     child: LayoutBuilder(
       builder: (context, constraints) => Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFF304F40),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: const Icon(
-              Icons.eco_outlined,
-              color: Color(0xFFF0F3E9),
-              size: 24,
-            ),
-          ),
+          const Lumi(size: 36),
           const SizedBox(width: 10),
-          const Flexible(
+          Flexible(
             child: Text(
-              'lifeOS.',
+              'LifeOS',
               style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w600,
-                color: _ink,
-                letterSpacing: -1.3,
+                fontFamily: headingFont,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: context.lc.text,
+                letterSpacing: -0.8,
               ),
             ),
           ),
@@ -405,11 +409,15 @@ class _LoginScreenState extends State<LoginScreen> {
               MediaQuery.textScalerOf(context).scale(10) <= 14) ...[
             const Spacer(),
             const SizedBox(width: 16),
-            const Flexible(
+            Flexible(
               child: Text(
                 'YOUR PERSONAL SPACE',
                 textAlign: TextAlign.end,
-                style: TextStyle(fontSize: 10, letterSpacing: 1, color: _muted),
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  color: context.lc.muted,
+                ),
               ),
             ),
           ],
@@ -425,7 +433,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           children: [
             _header(),
-            const Divider(height: 1, color: Color(0xFFE5E9DF)),
+            Divider(height: 1, color: context.lc.border),
             Expanded(
               child: AnimatedBuilder(
                 animation: widget.controller,
@@ -448,21 +456,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               Align(
                                 alignment: Alignment.centerLeft,
-                                child: Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F4EB),
-                                    border: Border.all(
-                                      color: const Color(0xFFE5E9DC),
-                                    ),
-                                    borderRadius: BorderRadius.circular(15),
-                                  ),
-                                  child: const Icon(
-                                    Icons.eco_outlined,
-                                    color: Color(0xFF7B8B61),
-                                    size: 27,
-                                  ),
+                                child: Lumi(
+                                  size: 64,
+                                  mood: auth.busy || !auth.initialized
+                                      ? LumiMood.thinking
+                                      : LumiMood.happy,
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -470,10 +468,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _registering
                                     ? 'MAKE A LITTLE SPACE FOR YOURSELF'
                                     : 'LET’S PICK UP WHERE YOU LEFT OFF',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   letterSpacing: 1.3,
-                                  color: _muted,
+                                  color: context.lc.muted,
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -485,9 +483,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   fontSize: constraints.maxWidth < 400
                                       ? 32
                                       : 36,
-                                  fontWeight: FontWeight.w400,
-                                  color: _ink,
-                                  letterSpacing: -1.5,
+                                  fontFamily: headingFont,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.lc.text,
+                                  letterSpacing: -1.2,
                                 ),
                               ),
                               const SizedBox(height: 10),
@@ -495,10 +494,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _registering
                                     ? 'Create one account for web, Android, and iOS.'
                                     : 'Your space is waiting. Come on in.',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
                                   height: 1.6,
-                                  color: _muted,
+                                  color: context.lc.muted,
                                 ),
                               ),
                               const SizedBox(height: 24),
@@ -508,13 +507,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFFFF0E9),
-                                      borderRadius: BorderRadius.circular(8),
+                                      color: context.lc.danger.withValues(
+                                        alpha: .12,
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
                                     ),
                                     child: Text(
                                       auth.error!,
-                                      style: const TextStyle(
-                                        color: Color(0xFF99442F),
+                                      style: TextStyle(
+                                        color: context.lc.danger,
                                         fontSize: 14,
                                         height: 1.6,
                                       ),
@@ -526,10 +527,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               if (auth.wakingServer) ...[
                                 Semantics(
                                   liveRegion: true,
-                                  child: const Text(
+                                  child: Text(
                                     'Waking up the server, this can take up to a minute',
                                     style: TextStyle(
-                                      color: _muted,
+                                      color: context.lc.muted,
                                       fontSize: 14,
                                       height: 1.6,
                                     ),
@@ -537,23 +538,26 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 16),
                               ] else if (!auth.initialized) ...[
-                                const Text(
+                                Text(
                                   'Checking your session…',
-                                  style: TextStyle(color: _muted, fontSize: 14),
+                                  style: TextStyle(
+                                    color: context.lc.muted,
+                                    fontSize: 14,
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                               ],
                               _loginForm(auth),
                               const SizedBox(height: 26),
-                              const Divider(color: Color(0xFFE7EADE)),
+                              Divider(color: context.lc.border),
                               const SizedBox(height: 14),
-                              const Row(
+                              Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.lock_outline_rounded,
                                     size: 13,
-                                    color: _muted,
+                                    color: context.lc.muted,
                                   ),
                                   SizedBox(width: 7),
                                   Flexible(
@@ -561,18 +565,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                       'A secure start to something good.',
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: _muted,
+                                        color: context.lc.muted,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 28),
-                              const Text(
+                              Text(
                                 'Web · Android · iOS\nOne connected experience.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: _muted,
+                                  color: context.lc.muted,
                                   fontSize: 12,
                                   height: 1.9,
                                 ),

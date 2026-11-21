@@ -18,8 +18,14 @@ export function publicUser(user) {
     name: user.name,
     email: user.email,
     loginId: user.loginId ?? null,
-    provider: user.googleId ? 'google' : user.demoExpiresAt ? 'demo' : 'password',
-    ...(user.demoExpiresAt ? { demoExpiresAt: new Date(user.demoExpiresAt).toISOString() } : {}),
+    provider: user.googleId
+      ? 'google'
+      : user.demoExpiresAt
+        ? 'demo'
+        : 'password',
+    ...(user.demoExpiresAt
+      ? { demoExpiresAt: new Date(user.demoExpiresAt).toISOString() }
+      : {}),
   };
 }
 

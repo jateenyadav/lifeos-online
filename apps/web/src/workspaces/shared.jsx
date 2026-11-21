@@ -29,10 +29,12 @@ export function Stat({
   tone = '',
   icon: Icon,
   space,
+  href,
   children,
 }) {
+  const Tag = href ? 'a' : 'div';
   return (
-    <div className={`space-stat ${tone}`} data-space={space}>
+    <Tag className={`space-stat ${tone}`} data-space={space} href={href}>
       <span className="stat-label">
         {Icon && (
           <span className="stat-icon" aria-hidden="true">
@@ -44,7 +46,7 @@ export function Stat({
       <strong>{value}</strong>
       {detail && <small>{detail}</small>}
       {children && <div className="stat-visual">{children}</div>}
-    </div>
+    </Tag>
   );
 }
 export function Empty({ title, detail, action, onAction }) {

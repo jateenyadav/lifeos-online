@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:lifeos_mobile/main.dart';
 import 'support/auth_fixture.dart';
 import 'support/workspace_fixture.dart';
@@ -7,6 +9,14 @@ import 'support/workspace_fixture.dart';
 void main() {
   Future<void> openSpace(WidgetTester tester, int index) async {
     await tester.tap(find.byType(NavigationDestination).at(index));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openWorkouts(WidgetTester tester) async {
+    await openSpace(tester, 3);
+    await tester.ensureVisible(find.byKey(const Key('habits_workouts')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('habits_workouts')));
     await tester.pumpAndSettle();
   }
 
@@ -29,18 +39,29 @@ void main() {
     await controller.restoreSession();
     await tester.pumpWidget(LifeOsApp(controller: controller));
     await tester.pumpAndSettle();
-    expect(find.byType(NavigationDestination), findsNWidgets(6));
-    expect(find.text('Hello, LifeOS.'), findsOneWidget);
+    expect(find.byType(NavigationDestination), findsNWidgets(5));
+    for (final label in ['Today', 'Money', 'Notes', 'Habits', 'More']) {
+      expect(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text(label),
+        ),
+        findsOneWidget,
+      );
+    }
+    expect(find.byKey(const Key('today_hero')), findsOneWidget);
     for (final entry in {
-      1: 'Notes & reminders',
-      2: 'Workout tracker',
+      1: 'Overview',
+      2: 'Notes & reminders',
       3: 'Daily routines',
-      4: 'Spending tracker',
+      4: 'Appearance',
     }.entries) {
       await openSpace(tester, entry.key);
-      expect(find.text(entry.value), findsOneWidget);
+      expect(find.text(entry.value), findsWidgets);
       expect(tester.takeException(), isNull);
     }
+    await openWorkouts(tester);
+    expect(find.text('Workout tracker'), findsOneWidget);
   });
 
   testWidgets('creates and edits a note through the shared authenticated API', (
@@ -56,7 +77,7 @@ void main() {
     await controller.restoreSession();
     await tester.pumpWidget(LifeOsApp(controller: controller));
     await tester.pumpAndSettle();
-    await openSpace(tester, 1);
+    await openSpace(tester, 2);
     await tester.tap(find.text('New note'));
     await tester.pumpAndSettle();
     await tester.enterText(field('Title'), 'A real note');
@@ -112,39 +133,53 @@ void main() {
     expect(fixture.data['routines']!.first['completedDates'], isEmpty);
   });
 
-  testWidgets('logs a workout and stores exact expense and budget amounts', (
+  testWidgets('logs a workout and adds an exact payment through /api/money', (
     tester,
   ) async {
     final fixture = WorkspaceFixture();
+    final moneyCalls = <http.Request>[];
     final controller = makeController(
       store: MemoryTokenStore()..token = 'saved-session',
       respond: (_) async => jsonResponse({'user': testAccount}),
       workspaceRespond: fixture.respond,
+      moneyRespond: (request) async {
+        moneyCalls.add(request);
+        if (request.method == 'POST' && request.url.path == '/api/money/txns') {
+          return jsonResponse({
+            'txn': {'id': 't1', ...jsonDecode(request.body) as Map},
+          }, 201);
+        }
+        return emptyMoney(request);
+      },
     );
     addTearDown(controller.dispose);
     await controller.restoreSession();
     await tester.pumpWidget(LifeOsApp(controller: controller));
     await tester.pumpAndSettle();
-    await openSpace(tester, 2);
+    await openWorkouts(tester);
     await tester.tap(find.text('Log workout'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('A walk'));
     await save(tester);
     expect(fixture.data['workouts']!.first['duration'], 20);
-    await openSpace(tester, 4);
-    await tester.tap(find.text('Add expense'));
+    await openSpace(tester, 1);
+    await tester.tap(find.byKey(const Key('money_add')));
     await tester.pumpAndSettle();
-    await tester.enterText(field('What was it for?'), 'Lunch');
-    await tester.enterText(field('Amount (INR)'), '25.05');
-    await save(tester);
-    expect(fixture.data['expenses']!.first['amountMinor'], 2505);
-    await tester.ensureVisible(find.text('Set budget'));
-    await tester.tap(find.text('Set budget'));
+    await tester.enterText(find.byKey(const Key('txn_amount')), '25.05');
+    await tester.enterText(find.byKey(const Key('txn_title')), 'Lunch');
+    await tester.ensureVisible(find.byKey(const Key('txn_save')));
+    await tester.tap(find.byKey(const Key('txn_save')));
     await tester.pumpAndSettle();
-    await tester.enterText(field('Monthly budget (INR)'), '100.00');
-    await save(tester);
-    expect(fixture.data['budgets']!.first['limitMinor'], 10000);
-    expect(find.text('₹74.95'), findsOneWidget);
+    final post = moneyCalls.firstWhere(
+      (request) =>
+          request.method == 'POST' && request.url.path == '/api/money/txns',
+    );
+    final body = jsonDecode(post.body) as Map<String, dynamic>;
+    expect(body['amountMinor'], 2505);
+    expect(body['amountMinor'], isA<int>());
+    expect(body['direction'], 'debit');
+    expect(body['title'], 'Lunch');
+    expect(post.headers['Authorization'], 'Bearer saved-session');
   });
 
   testWidgets('failed saves retain the draft and never claim success', (
@@ -160,7 +195,7 @@ void main() {
     await controller.restoreSession();
     await tester.pumpWidget(LifeOsApp(controller: controller));
     await tester.pumpAndSettle();
-    await openSpace(tester, 1);
+    await openSpace(tester, 2);
     await tester.tap(find.text('New note'));
     await tester.pumpAndSettle();
     await tester.enterText(field('Title'), 'Keep my draft');
@@ -193,11 +228,14 @@ void main() {
       await controller.restoreSession();
       await tester.pumpWidget(LifeOsApp(controller: controller));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Sign out'));
+      await openSpace(tester, 4);
+      await tester.ensureVisible(find.byKey(const Key('more_sign_out')));
+      await tester.tap(find.byKey(const Key('more_sign_out')));
       await tester.pumpAndSettle();
       expect(find.text('Please try signing out again.'), findsOneWidget);
       failLogout = false;
-      await tester.tap(find.byTooltip('Sign out'));
+      await tester.ensureVisible(find.byKey(const Key('more_sign_out')));
+      await tester.tap(find.byKey(const Key('more_sign_out')));
       await tester.pumpAndSettle();
       expect(find.text('Welcome back.'), findsOneWidget);
       expect(find.byType(NavigationBar), findsNothing);
@@ -223,7 +261,7 @@ void main() {
     await controller.restoreSession();
     await tester.pumpWidget(LifeOsApp(controller: controller));
     await tester.pumpAndSettle();
-    await openSpace(tester, 1);
+    await openSpace(tester, 2);
     await tester.tap(find.text('New note'));
     await tester.pumpAndSettle();
     await tester.enterText(field('Title'), 'An expired draft');
@@ -253,13 +291,15 @@ void main() {
     await tester.pumpWidget(LifeOsApp(controller: controller));
     await tester.pumpAndSettle();
     for (final entry in [
-      (1, 'New note'),
-      (2, 'Log workout'),
+      (2, 'New note'),
       (3, 'Add routine'),
-      (4, 'Add expense'),
-      (4, 'Set budget'),
+      (5, 'Log workout'),
     ]) {
-      await openSpace(tester, entry.$1);
+      if (entry.$1 == 5) {
+        await openWorkouts(tester);
+      } else {
+        await openSpace(tester, entry.$1);
+      }
       await tester.ensureVisible(find.text(entry.$2));
       await tester.tap(find.text(entry.$2));
       await tester.pumpAndSettle();
@@ -297,6 +337,12 @@ void main() {
       expect(tester.takeException(), isNull);
       for (var index = 1; index < 5; index++) {
         await openSpace(tester, index);
+        expect(tester.takeException(), isNull);
+      }
+      await openSpace(tester, 1);
+      for (final tab in ['Transactions', 'Khata', 'Accounts', 'Trips']) {
+        await tester.tap(find.byKey(Key('money_tab_$tab')));
+        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       }
     });

@@ -22,7 +22,7 @@ The cloud deployment still needs your hosting account and private code repositor
 
 - **LifeOS AI (free, no key):** Personal AI now works on the live website. The server holds free AI keys
   (Groq first, then Google Gemini, then OpenRouter) and falls back automatically. Each user gets a daily allowance.
-  Local Ollama and your own OpenAI / AWS Bedrock keys still work.
+  Local Ollama and bring-your-own OpenAI / AWS Bedrock keys were removed: they never worked on the live site.
 - **Tell LifeOS:** type "Spent 250 on lunch with Rahul yesterday", "Remind me to pay rent on the 1st" or
   "Ran 5 km for 30 minutes". The AI uses tool calling to propose one entry, you check it, then press Save.
   Spending questions ("How much on food this month?") are answered from your own data.
@@ -262,7 +262,7 @@ Automated Google-success tests use a fake identity verifier; they do not prove y
 - [Workspace guide](docs/WORKSPACES.md): daily features, storage, and separate module files.
 - [Notification spending](docs/NOTIFICATION_SPENDING.md): Android permissions, background saving, privacy, and iPhone limits.
 - [Money review](docs/MONEY_REVIEW.md): payment context, remembered recipients, people balances, trip splits, and API fields.
-- [Personal AI](docs/PERSONAL_AI.md): local workout, skin care, and spending questions, your own knowledge, and optional OpenAI or AWS Bedrock credentials.
+- [Personal AI](docs/PERSONAL_AI.md): workout, skin care, and spending questions with the free server-side LifeOS AI, plus your own knowledge.
 
 This is a working authentication foundation for learning, **not a claim that the app is ready for production or App Store submission**.
 Email verification, password reset, reminder notifications, and offline editing still need separate work.

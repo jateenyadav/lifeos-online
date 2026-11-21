@@ -1,9 +1,26 @@
+import { ownMinor, periodTotals, spendDelta } from './money/ledger.js';
+
 export const aiTopics = ['workouts', 'routines', 'spending'];
 const topicCollections = {
   workouts: ['workouts'],
   routines: ['routines'],
-  spending: ['expenses', 'budgets'],
+  spending: ['txns', 'budgets'],
 };
+const moneyCollections = new Set(['txns', 'budgets']);
+
+/** Newest Money v2 rows for the AI (transactions never include deleted ones). */
+async function listMoney(money, collection, userId, limit) {
+  if (!money) return [];
+  const rows = await money.list(
+    collection,
+    userId,
+    collection === 'txns' ? { deleted: { $ne: true } } : {},
+  );
+  const key = collection === 'txns' ? 'date' : 'month';
+  return rows
+    .sort((a, b) => String(b[key]).localeCompare(String(a[key])))
+    .slice(0, limit);
+}
 const tokens = (text) => [
   ...new Set(text.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? []),
 ];
@@ -11,6 +28,7 @@ const rupees = (amountMinor) => `INR ${(amountMinor / 100).toFixed(2)}`;
 
 export async function buildAiContext({
   store,
+  money,
   knowledge,
   userId,
   topics,
@@ -19,7 +37,11 @@ export async function buildAiContext({
 }) {
   const collections = topics.flatMap((topic) => topicCollections[topic]);
   const lists = await Promise.all(
-    collections.map((collection) => store.listForAi(collection, userId, 2001)),
+    collections.map((collection) =>
+      moneyCollections.has(collection)
+        ? listMoney(money, collection, userId, 2001)
+        : store.listForAi(collection, userId, 2001),
+    ),
   );
   const rows = Object.fromEntries(
     collections.map((collection, index) => [
@@ -41,20 +63,22 @@ export async function buildAiContext({
     summaries.push(
       `Daily routines: ${rows.routines.length} saved. Skin care routines: ${rows.routines.filter((entry) => entry.category === 'Skin care').length}.`,
     );
-  if (rows.expenses) {
-    const monthly = rows.expenses.filter((entry) =>
-      entry.date.startsWith(month),
-    );
+  if (rows.txns) {
+    const monthly = rows.txns.filter((entry) => entry.date.startsWith(month));
+    const totals = periodTotals(monthly);
     const categories = {};
-    for (const entry of monthly)
-      categories[entry.category] =
-        (categories[entry.category] ?? 0) + entry.amountMinor;
+    for (const entry of monthly) {
+      const delta = spendDelta(entry);
+      if (delta)
+        categories[entry.category] = (categories[entry.category] ?? 0) + delta;
+    }
     summaries.push(
-      `Spending for ${month}: ${rupees(monthly.reduce((sum, entry) => sum + entry.amountMinor, 0))} across ${monthly.length} saved expenses. Categories: ${
+      `Spending for ${month}: ${rupees(totals.spentMinor)} (my own part, after friends' shares, refunds and reimbursements). Income: ${rupees(totals.incomeMinor)}. Categories: ${
         Object.entries(categories)
+          .filter(([, total]) => total > 0)
           .map(([category, total]) => `${category}: ${rupees(total)}`)
           .join(', ') || 'none'
-      }. Pending payments are not included.`,
+      }. Pending, failed and self-transfer transactions are not included.`,
     );
   }
   const candidates = [];
@@ -76,14 +100,24 @@ export async function buildAiContext({
                 days: entry.days,
                 completedDates: (entry.completedDates ?? []).slice(-60),
               }
-            : collection === 'expenses'
+            : collection === 'txns'
               ? {
                   date: entry.date,
+                  direction:
+                    entry.direction === 'credit' ? 'money in' : 'money out',
                   amount: rupees(entry.amountMinor),
+                  myPart: rupees(ownMinor(entry)),
                   category: entry.category,
+                  status: entry.status,
+                  transfer: entry.isTransfer || undefined,
                   note: entry.note,
                 }
-              : { month: entry.month, limit: rupees(entry.limitMinor) };
+              : {
+                  month: entry.month,
+                  category:
+                    entry.category === '*' ? 'whole month' : entry.category,
+                  limit: rupees(entry.limitMinor),
+                };
       candidates.push({
         id: entry.id,
         title: entry.title ?? `Budget ${entry.month}`,

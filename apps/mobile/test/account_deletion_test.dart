@@ -17,7 +17,7 @@ class TrackingGoogleIdentity extends FakeGoogleIdentity {
   }
 }
 
-class TrackingNotificationBridge extends FakeNotificationBridge {
+class TrackingNotificationBridge extends FakeCaptureBridge {
   final configurations = <Map<String, String?>>[];
   bool failClear = false;
 
@@ -44,9 +44,14 @@ Finder deletionField(String label) => find.byWidgetPredicate(
 );
 
 Future<void> openDeletion(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('Account options'));
+  await tester.tap(find.text('More'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Delete account'));
+  await tester.scrollUntilVisible(
+    find.byKey(const Key('more_delete')),
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.tap(find.byKey(const Key('more_delete')));
   await tester.pumpAndSettle();
 }
 
@@ -61,7 +66,7 @@ void main() {
       final controller = makeController(
         store: store,
         google: google,
-        notifications: notifications,
+        capture: notifications,
         respond: (request) async {
           if (request.method == 'DELETE') {
             deletions++;
@@ -108,7 +113,7 @@ void main() {
       final controller = makeController(
         store: store,
         google: google,
-        notifications: notifications,
+        capture: notifications,
         respond: (request) async => request.method == 'DELETE'
             ? jsonResponse({
                 'message': 'Incorrect password. Your account was not deleted.',
@@ -197,7 +202,7 @@ void main() {
       final controller = makeController(
         store: store,
         google: google,
-        notifications: notifications,
+        capture: notifications,
         respond: (request) async => request.method == 'DELETE'
             ? jsonResponse({}, 204)
             : jsonResponse({'user': testAccount}),

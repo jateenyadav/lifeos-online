@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lifeos_mobile/spending/money_editor.dart';
-import 'package:lifeos_mobile/spending/money_hub.dart';
+import 'package:lifeos_mobile/money/ui/trips_tab.dart';
 import 'package:lifeos_mobile/spending/money_utils.dart';
 import 'package:lifeos_mobile/workspaces/workspace_controller.dart';
 import 'support/auth_fixture.dart';
 
-class MoneyStore extends WorkspaceController {
-  MoneyStore(super.auth) {
+class TripStore extends WorkspaceController {
+  TripStore(super.auth) {
     loading = false;
     loaded = true;
   }
@@ -37,13 +37,13 @@ const pendingPayment = {
 };
 
 void main() {
-  Future<MoneyStore> makeStore() async {
+  Future<TripStore> makeStore() async {
     final auth = makeController(
       store: MemoryTokenStore()..token = 'saved-session',
       respond: (_) async => jsonResponse({'user': testAccount}),
     );
     await auth.restoreSession();
-    final store = MoneyStore(auth);
+    final store = TripStore(auth);
     addTearDown(store.dispose);
     addTearDown(auth.dispose);
     return store;
@@ -51,7 +51,7 @@ void main() {
 
   Future<void> openEditor(
     WidgetTester tester,
-    MoneyStore store, {
+    TripStore store, {
     String mode = 'payment',
     Map<String, dynamic>? entry,
     Map<String, dynamic>? trip,
@@ -232,28 +232,28 @@ void main() {
     );
   });
 
-  testWidgets('money views and split editor fit a narrow phone', (
-    tester,
-  ) async {
+  testWidgets('trips tab and split editor fit a narrow phone', (tester) async {
     tester.view.physicalSize = const Size(320, 740);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final store = await makeStore();
-    store.data['payments'] = [pendingPayment];
+    store.data['trips'] = [
+      {
+        'id': 'trip',
+        'title': 'Goa',
+        'members': ['Me', 'Ria', 'Sam'],
+        'budgetMinor': 500000,
+      },
+    ];
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(child: MoneyHub(store: store)),
-        ),
+        home: Scaffold(body: TripsTab(store: store)),
       ),
     );
     await tester.pumpAndSettle();
-    for (final tab in ['People', 'Trips', 'Payments']) {
-      await tester.tap(find.text(tab));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    }
+    expect(find.text('Goa'), findsOneWidget);
+    expect(tester.takeException(), isNull);
     await openEditor(
       tester,
       store,

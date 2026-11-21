@@ -21,6 +21,8 @@ const userSchema = new mongoose.Schema(
     googleId: { type: String, unique: true, sparse: true },
     // Set only for "Try the demo" accounts; they are deleted after this time.
     demoExpiresAt: { type: Date, index: { sparse: true } },
+    // Set once the old spending space was copied into Money v2 (docs/MONEY.md §3).
+    moneyMigratedAt: { type: Date },
   },
   { timestamps: true },
 );
@@ -50,7 +52,11 @@ export const mongoUsers = {
   findByGoogleId: (googleId) => User.findOne({ googleId }).lean(),
   findById: (userId) => User.findById(userId).lean(),
   expiredDemoIds: async (now = new Date()) =>
-    (await User.find({ demoExpiresAt: { $lt: now } }, { _id: 1 }).limit(200).lean()).map((u) => String(u._id)),
+    (
+      await User.find({ demoExpiresAt: { $lt: now } }, { _id: 1 })
+        .limit(200)
+        .lean()
+    ).map((u) => String(u._id)),
   create: async (values) => (await User.create(values)).toObject(),
 };
 

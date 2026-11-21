@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../theme/tokens.dart';
 import 'workspace_controller.dart';
 import 'shared.dart';
 import 'utils.dart';
@@ -82,7 +83,7 @@ class _RoutinesSpaceState extends State<RoutinesSpace> {
         ),
         for (final entry in visible)
           SpaceCard(
-            tone: isDone(entry, _date) ? const Color(0xFFF3F7EB) : null,
+            highlight: isDone(entry, _date),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -100,15 +101,18 @@ class _RoutinesSpaceState extends State<RoutinesSpace> {
                         children: [
                           Text(
                             entry['title'],
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: ink,
+                              color: context.lc.text,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             '${entry['category']} · ${entry['time']}',
-                            style: const TextStyle(color: muted, fontSize: 11),
+                            style: TextStyle(
+                              color: context.lc.muted,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
@@ -133,8 +137,8 @@ class _RoutinesSpaceState extends State<RoutinesSpace> {
                         padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           color: isDone(entry, day)
-                              ? const Color(0xFFDEECD1)
-                              : const Color(0xFFF4F6EF),
+                              ? context.lc.primary.withValues(alpha: .25)
+                              : context.lc.surface2,
                           borderRadius: BorderRadius.circular(5),
                         ),
                         child: Text(
@@ -144,8 +148,8 @@ class _RoutinesSpaceState extends State<RoutinesSpace> {
                           ),
                           style: TextStyle(
                             color: dueOn(entry, day)
-                                ? muted
-                                : const Color(0xFFB0BAA6),
+                                ? context.lc.text
+                                : context.lc.muted.withValues(alpha: .5),
                             fontSize: 10,
                           ),
                         ),
@@ -155,7 +159,7 @@ class _RoutinesSpaceState extends State<RoutinesSpace> {
                 const SizedBox(height: 12),
                 Text(
                   '${routineStreak(entry)} day streak · scheduled days only',
-                  style: const TextStyle(color: muted, fontSize: 11),
+                  style: TextStyle(color: context.lc.muted, fontSize: 11),
                 ),
               ],
             ),
@@ -178,11 +182,14 @@ class _RoutinesSpaceState extends State<RoutinesSpace> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(entry['title'], style: const TextStyle(color: ink)),
+                      Text(
+                        entry['title'],
+                        style: TextStyle(color: context.lc.text),
+                      ),
                       const SizedBox(height: 7),
                       Text(
                         '${(entry['days'] as List).map((day) => dayNames[day]).join(', ')} · ${entry['time']}',
-                        style: const TextStyle(color: muted, fontSize: 11),
+                        style: TextStyle(color: context.lc.muted, fontSize: 11),
                       ),
                     ],
                   ),
@@ -198,9 +205,9 @@ class _RoutinesSpaceState extends State<RoutinesSpace> {
               ],
             ),
           ),
-        const Text(
+        Text(
           'Medicine tracking records your existing routine. It does not recommend medicines or doses.',
-          style: TextStyle(color: muted, fontSize: 11, height: 1.8),
+          style: TextStyle(color: context.lc.muted, fontSize: 11, height: 1.8),
         ),
       ],
     );

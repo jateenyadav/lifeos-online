@@ -21,7 +21,7 @@ export function memoryUsage() {
 
 /**
  * "LifeOS AI": free cloud models with keys held by the server (Groq → Gemini → OpenRouter),
- * so the live website works without Ollama and without users bringing their own key.
+ * so the live website works with no key from the user.
  * Each user gets a daily question allowance to protect the free quotas.
  */
 export function createCloudAi({
@@ -32,7 +32,13 @@ export function createCloudAi({
   log,
 } = {}) {
   const providers = providersFromEnv(env);
-  const ai = createAi({ providers, timeoutMs: 30000, appName: 'LifeOS', log, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
+  const ai = createAi({
+    providers,
+    timeoutMs: 30000,
+    appName: 'LifeOS',
+    log,
+    ...(fetchImpl ? { fetch: fetchImpl } : {}),
+  });
 
   async function spend(userId) {
     const day = new Date().toISOString().slice(0, 10);
@@ -58,13 +64,24 @@ export function createCloudAi({
     ai,
     spend,
     async answer({ userId, system, messages }) {
-      if (!providers.length) throw new ApiError(503, 'LifeOS AI is not set up on this server yet. Use local AI or your own key.');
+      if (!providers.length)
+        throw new ApiError(503, 'LifeOS AI is not set up on this server yet.');
       const quota = await spend(userId);
       try {
-        const { text, provider } = await ai.chat({ system, messages, maxTokens: 1000, temperature: 0.3, label: 'lifeos-chat' });
+        const { text, provider } = await ai.chat({
+          system,
+          messages,
+          maxTokens: 1000,
+          temperature: 0.3,
+          label: 'lifeos-chat',
+        });
         return { text: text.slice(0, 12000), provider, quota };
       } catch (error) {
-        if (error?.status === 503) throw new ApiError(503, 'LifeOS AI is busy right now. Please try again in a minute.');
+        if (error?.status === 503)
+          throw new ApiError(
+            503,
+            'LifeOS AI is busy right now. Please try again in a minute.',
+          );
         throw error;
       }
     },

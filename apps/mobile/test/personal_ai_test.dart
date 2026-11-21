@@ -2,87 +2,58 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:lifeos_mobile/auth/auth_api.dart';
 import 'package:lifeos_mobile/workspaces/personal_ai_space.dart';
 import 'support/auth_fixture.dart';
 
 void main() {
-  test(
-    'cloud credentials are blocked before an insecure remote request is sent',
-    () async {
-      var requests = 0;
-      final api = AuthApi(
-        baseUrl: 'http://192.168.1.5:4000/api',
-        client: MockClient((request) async {
-          requests++;
-          return jsonResponse({});
-        }),
-      );
-      addTearDown(api.close);
-      expect(api.supportsCloudKeys, false);
-      expect(
-        () => api.ai(
-          '/chat',
-          'token',
-          method: 'POST',
-          body: {
-            'provider': 'bedrock',
-            'credentials': {'secretAccessKey': 'secret'},
-          },
-        ),
-        throwsA(isA<ApiException>()),
-      );
-      expect(requests, 0);
-    },
-  );
   Finder field(String label) => find.widgetWithText(TextFormField, label);
 
-  testWidgets('uses local AI without keys and saves personal knowledge', (
+  testWidgets('uses free LifeOS AI without keys and saves personal knowledge', (
     tester,
   ) async {
     final calls = <http.Request>[];
     final documents = <Map<String, dynamic>>[];
+    Future<http.Response> handle(http.Request request) async {
+      calls.add(request);
+      if (request.url.path == '/api/auth/me') {
+        return jsonResponse({'user': testAccount});
+      }
+      if (request.url.path == '/api/ai/status') {
+        return jsonResponse({
+          'lifeos': {
+            'available': true,
+            'message': 'LifeOS AI is ready. Free, no key needed.',
+          },
+        });
+      }
+      if (request.url.path == '/api/ai/chat') {
+        return jsonResponse({
+          'provider': 'lifeos',
+          'model': 'groq',
+          'answer': 'Your saved routine is morning care. [S1]',
+          'sources': [
+            {'label': 'S1', 'title': 'Morning care', 'kind': 'routines'},
+          ],
+        });
+      }
+      if (request.url.path == '/api/ai/knowledge') {
+        if (request.method == 'POST') {
+          final entry = <String, dynamic>{
+            'id': 'doc-1',
+            ...jsonDecode(request.body) as Map<String, dynamic>,
+          };
+          documents.add(entry);
+          return jsonResponse({'document': entry}, 201);
+        }
+        return jsonResponse({'documents': documents});
+      }
+      return jsonResponse({'message': 'Not found'}, 404);
+    }
+
     final controller = makeController(
       store: MemoryTokenStore()..token = 'saved-session',
-      respond: (request) async {
-        calls.add(request);
-        if (request.url.path == '/api/auth/me') {
-          return jsonResponse({'user': testAccount});
-        }
-        if (request.url.path == '/api/ai/status') {
-          return jsonResponse({
-            'local': {
-              'available': true,
-              'models': ['llama3.2:3b'],
-              'message': 'Ollama ready',
-            },
-            'defaultModel': 'llama3.2:3b',
-          });
-        }
-        if (request.url.path == '/api/ai/chat') {
-          return jsonResponse({
-            'provider': 'local',
-            'model': 'llama3.2:3b',
-            'answer': 'Your saved routine is morning care. [S1]',
-            'sources': [
-              {'label': 'S1', 'title': 'Morning care', 'kind': 'routines'},
-            ],
-          });
-        }
-        if (request.url.path == '/api/ai/knowledge') {
-          if (request.method == 'POST') {
-            final entry = <String, dynamic>{
-              'id': 'doc-1',
-              ...jsonDecode(request.body) as Map<String, dynamic>,
-            };
-            documents.add(entry);
-            return jsonResponse({'document': entry}, 201);
-          }
-          return jsonResponse({'documents': documents});
-        }
-        return jsonResponse({'message': 'Not found'}, 404);
-      },
+      respond: handle,
+      aiRespond: handle,
     );
     addTearDown(controller.dispose);
     await controller.restoreSession();
@@ -94,7 +65,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Ollama ready'), findsOneWidget);
+    expect(
+      find.text('LifeOS AI is ready. Free, no key needed.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Ollama'), findsNothing);
+    expect(find.textContaining('API key'), findsNothing);
     await tester.enterText(field('Your question'), 'What routines do I have?');
     await tester.ensureVisible(find.text('Ask AI'));
     await tester.tap(find.text('Ask AI'));
@@ -105,7 +81,8 @@ void main() {
     );
     final chat = calls.firstWhere((entry) => entry.url.path == '/api/ai/chat');
     final body = jsonDecode(chat.body) as Map<String, dynamic>;
-    expect(body['provider'], 'local');
+    expect(body['provider'], 'lifeos');
+    expect(body['cloudConsent'], true);
     expect(body.containsKey('credentials'), false);
     expect(body['history'], isEmpty);
     expect(chat.headers['Authorization'], 'Bearer saved-session');
@@ -127,9 +104,9 @@ void main() {
     final store = MemoryTokenStore()..token = 'saved-session';
     final controller = makeController(
       store: store,
-      respond: (request) async => request.url.path == '/api/auth/me'
-          ? jsonResponse({'user': testAccount})
-          : jsonResponse({'message': 'Please sign in again.'}, 401),
+      respond: (request) async => jsonResponse({'user': testAccount}),
+      aiRespond: (request) async =>
+          jsonResponse({'message': 'Please sign in again.'}, 401),
     );
     addTearDown(controller.dispose);
     await controller.restoreSession();

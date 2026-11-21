@@ -746,11 +746,15 @@ test('workspace polling returns 304 when nothing changed, fresh data after a cha
   assert.ok(etag);
   await call(app, tokens[0], 'get', '').set('If-None-Match', etag).expect(304);
   await call(app, tokens[0], 'post', '/notes').send(note).expect(201);
-  const changed = await call(app, tokens[0], 'get', '').set('If-None-Match', etag).expect(200);
+  const changed = await call(app, tokens[0], 'get', '')
+    .set('If-None-Match', etag)
+    .expect(200);
   assert.notEqual(changed.headers.etag, etag);
   assert.equal(changed.body.notes.length, 1);
   // Another user's ETag never matches mine.
-  const other = await call(app, tokens[1], 'get', '').set('If-None-Match', changed.headers.etag).expect(200);
+  const other = await call(app, tokens[1], 'get', '')
+    .set('If-None-Match', changed.headers.etag)
+    .expect(200);
   assert.equal(other.body.notes.length, 0);
 });
 
@@ -758,10 +762,31 @@ import { demoRecords, seedDemo } from '../src/demo-data.js';
 
 test('demo sample data is valid and lands in the demo user only', async () => {
   const created = [];
-  await seedDemo({ create: async (collection, userId, values) => created.push({ collection, userId, values }) }, 'demo-user');
-  const counts = Object.fromEntries(Object.entries(demoRecords()).map(([k, v]) => [k, v.length]));
-  assert.equal(created.length, Object.values(counts).reduce((a, b) => a + b, 0));
+  await seedDemo(
+    {
+      create: async (collection, userId, values) =>
+        created.push({ collection, userId, values }),
+    },
+    'demo-user',
+  );
+  const counts = Object.fromEntries(
+    Object.entries(demoRecords()).map(([k, v]) => [k, v.length]),
+  );
+  assert.equal(
+    created.length,
+    Object.values(counts).reduce((a, b) => a + b, 0),
+  );
   assert.ok(created.every((c) => c.userId === 'demo-user'));
-  assert.ok(created.some((c) => c.collection === 'notes' && c.values.kind === 'reminder' && c.values.dueDate));
-  assert.ok(created.filter((c) => c.collection === 'expenses').every((c) => Number.isInteger(c.values.amountMinor)));
+  assert.ok(
+    created.some(
+      (c) =>
+        c.collection === 'notes' &&
+        c.values.kind === 'reminder' &&
+        c.values.dueDate,
+    ),
+  );
+  // Money sample data lives in Money v2 now (see money-migration.test.js), not the old spaces.
+  assert.ok(
+    !created.some((c) => ['expenses', 'budgets'].includes(c.collection)),
+  );
 });

@@ -3,18 +3,23 @@ import { ApiError } from './auth.js';
 import { User, Session } from './models.js';
 import { workspaceModels } from './workspace-models.js';
 import { AiKnowledge, AiUsage } from './ai-models.js';
+import { moneyModels } from './money/store-mongo.js';
 
 export function createAccountDeletion({
   users = User,
   sessions = Session,
   workspaces = workspaceModels,
+  money = moneyModels,
   aiKnowledge = AiKnowledge,
   aiUsage = AiUsage,
   transaction = (action) => mongoose.connection.transaction(action),
 } = {}) {
   return (userId) =>
     transaction(async (session) => {
-      for (const model of Object.values(workspaces)) {
+      for (const model of [
+        ...Object.values(workspaces),
+        ...Object.values(money),
+      ]) {
         await model.deleteMany({ userId }, { session });
       }
       await aiKnowledge.deleteMany({ userId }, { session });

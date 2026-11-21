@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/tokens.dart';
 import 'workspace_controller.dart';
 import 'utils.dart';
 
@@ -236,10 +237,7 @@ class _EntryEditorState extends State<EntryEditor> {
       _ => 'Monthly budget',
     };
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: const Color(0xFFFAFBF7),
-      ),
+      appBar: AppBar(title: Text(title)),
       body: SafeArea(
         child: AnimatedBuilder(
           animation: widget.store,
@@ -399,7 +397,7 @@ class _EntryEditorState extends State<EntryEditor> {
                         liveRegion: true,
                         child: Text(
                           _error ?? widget.store.error!,
-                          style: const TextStyle(color: Color(0xFF99442F)),
+                          style: TextStyle(color: context.lc.danger),
                         ),
                       ),
                     ),

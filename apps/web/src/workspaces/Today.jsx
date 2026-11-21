@@ -1,23 +1,60 @@
+import { useEffect, useState } from 'react';
 import {
   ArrowUpRight,
   Bell,
+  BrainCircuit,
   Check,
   Dumbbell,
   Heart,
   NotebookPen,
-  Sun,
   Wallet,
 } from 'lucide-react';
-import {
-  dateKey,
-  dueOn,
-  expenseCategories,
-  money,
-  recentDays,
-} from './utils.js';
+import { dateKey, dueOn, recentDays } from './utils.js';
 import { Stat } from './shared.jsx';
+import { apiRequest } from '../api.js';
+import CountUp from '../ui/CountUp.jsx';
+import Lumi, { pickMood } from '../ui/Lumi.jsx';
+import { usePrefs } from '../ui/prefs.js';
+import { inr, monthKey } from '../money/format.js';
 
-export default function Today({ store, user }) {
+const tips = {
+  happy: 'One small thing done is a good day. Pick the easiest one first.',
+  proud: 'Every routine is done today. Take a breath, you earned it.',
+  worried:
+    'Something needs a look. A two-minute check now saves a worry later.',
+  sleepy: 'It is late. Notes can wait until morning.',
+  thinking: 'Getting your day ready…',
+};
+
+function useMonthMoney(onSessionExpired) {
+  const [state, setState] = useState({ data: null, error: '' });
+  useEffect(() => {
+    const controller = new AbortController();
+    apiRequest(`/money/overview?month=${monthKey()}`, {
+      signal: controller.signal,
+    })
+      .then(
+        (data) => !controller.signal.aborted && setState({ data, error: '' }),
+      )
+      .catch((failure) => {
+        if (controller.signal.aborted) return;
+        if (failure.status === 401) onSessionExpired?.();
+        setState({ data: null, error: failure.message });
+      });
+    return () => controller.abort();
+  }, [onSessionExpired]);
+  return state;
+}
+
+export default function Today({
+  store,
+  user,
+  aiAvailable = false,
+  onSessionExpired,
+}) {
+  const [prefs] = usePrefs();
+  const moneyState = useMonthMoney(onSessionExpired);
+  const money = moneyState.data;
   const today = dateKey();
   const routines = store.data.routines.filter((entry) => dueOn(entry, today));
   const done = routines.filter((entry) =>
@@ -36,24 +73,16 @@ export default function Today({ store, user }) {
   const workouts = store.data.workouts.filter((entry) =>
     week.includes(entry.date),
   );
-  const monthExpenses = store.data.expenses.filter((entry) =>
-    entry.date.startsWith(today.slice(0, 7)),
-  );
-  const monthSpend = monthExpenses.reduce(
-    (sum, entry) => sum + entry.amountMinor,
-    0,
-  );
-  const byCategory = expenseCategories
-    .map((category) => ({
-      category,
-      amount: monthExpenses
-        .filter((entry) => entry.category === category)
-        .reduce((sum, entry) => sum + entry.amountMinor, 0),
-    }))
-    .filter((row) => row.amount > 0);
-  const budget = store.data.budgets.find(
-    (entry) => entry.month === today.slice(0, 7),
-  );
+  const budget = money?.budget ?? null;
+  const overBudget = Boolean(budget && money.spentMinor > budget.limitMinor);
+  const mood = pickMood({
+    hour: new Date().getHours(),
+    overBudget,
+    overdue: reminders.some((entry) => entry.dueDate < today),
+    routinesDone: done,
+    routinesTotal: routines.length,
+    loading: false,
+  });
   const routineShare = routines.length ? done / routines.length : 0;
   const quickActions = [
     {
@@ -79,17 +108,34 @@ export default function Today({ store, user }) {
     },
     {
       title: 'Know where it goes',
-      subtitle: 'Add an expense',
-      href: '#spending/new',
+      subtitle: 'Add a payment',
+      href: '#money/new',
       icon: Wallet,
-      tone: 'spending',
+      tone: 'money',
     },
+    ...(aiAvailable
+      ? [
+          {
+            title: 'Just say it',
+            subtitle: 'Tell LifeOS or ask AI',
+            href: '#ai',
+            icon: BrainCircuit,
+            tone: 'ai',
+          },
+        ]
+      : []),
   ];
   return (
     <>
-      <div className="today-hero" data-space="today">
-        <div>
-          <span className="space-eyebrow">YOUR DAY, A LITTLE LIGHTER</span>
+      <section className="today-hero hero-card" data-space="today">
+        <div className="today-hero-text">
+          <span className="space-eyebrow">
+            {new Date().toLocaleDateString('en-IN', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </span>
           <h1>
             Hello, {user.name.split(' ')[0]}
             <span>.</span>
@@ -102,21 +148,24 @@ export default function Today({ store, user }) {
               : `${routines.length - done} routines left · ${reminders.length} reminders need a look`}
           </div>
         </div>
-        <div className="hero-art" aria-hidden="true">
-          <span className="hero-sun">
-            <Sun size={34} strokeWidth={1.6} />
-          </span>
-          <div>
-            ONE DAY
-            <br />
-            <strong>at a time.</strong>
-          </div>
-        </div>
-      </div>
+        {prefs.lumi && (
+          <figure className="lumi-card">
+            <Lumi mood={mood} size={104} />
+            <figcaption>
+              <strong>Lumi</strong>
+              <span>{tips[mood]}</span>
+            </figcaption>
+          </figure>
+        )}
+      </section>
       <div className="space-stats">
         <Stat
           label="Daily usuals"
-          value={`${done} / ${routines.length}`}
+          value={
+            <>
+              <CountUp value={done} /> / {routines.length}
+            </>
+          }
           detail="Done today"
           icon={Heart}
           space="routines"
@@ -145,7 +194,11 @@ export default function Today({ store, user }) {
         </Stat>
         <Stat
           label="Your movement"
-          value={`${workouts.length} sessions`}
+          value={
+            <>
+              <CountUp value={workouts.length} /> sessions
+            </>
+          }
           detail="Last 7 days"
           icon={Dumbbell}
           space="workouts"
@@ -173,37 +226,39 @@ export default function Today({ store, user }) {
         </Stat>
         <Stat
           label="This month"
-          value={money(monthSpend)}
+          value={
+            money ? <CountUp value={money.spentMinor} format={inr} /> : '—'
+          }
           detail={
-            budget
-              ? `Spending · ${Math.round((monthSpend / budget.limitMinor) * 100)}% of budget`
-              : 'Spending · INR'
+            moneyState.error
+              ? 'Money could not load'
+              : budget
+                ? `Spent · ${Math.round((money.spentMinor / budget.limitMinor) * 100)}% of ${inr(budget.limitMinor)} budget`
+                : 'Spent · no budget set'
           }
           icon={Wallet}
-          space="spending"
+          space="money"
+          tone={overBudget ? 'warning' : ''}
+          href="#money"
         >
-          {monthSpend > 0 && (
+          {budget && (
             <div
-              className="month-bar"
+              className={`daily-progress ${overBudget ? 'over' : ''}`}
               role="img"
-              aria-label={`Spending by category: ${byCategory
-                .map((row) => `${row.category} ${money(row.amount)}`)
-                .join(', ')}`}
+              aria-label={`${Math.round((money.spentMinor / budget.limitMinor) * 100)}% of this month's budget used`}
             >
-              {byCategory.map((row) => (
-                <span
-                  key={row.category}
-                  data-cat={row.category}
-                  style={{ width: `${(row.amount / monthSpend) * 100}%` }}
-                />
-              ))}
+              <span
+                style={{
+                  width: `${Math.min(100, (money.spentMinor / budget.limitMinor) * 100)}%`,
+                }}
+              />
             </div>
           )}
         </Stat>
       </div>
       <div className="section-label">
         <h2>A little space for everything</h2>
-        <span>Four spaces. Your own pace.</span>
+        <span>Your spaces, your own pace.</span>
       </div>
       <div className="quick-spaces">
         {quickActions.map((action) => {

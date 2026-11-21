@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/tokens.dart';
 import '../workspaces/utils.dart';
 import '../workspaces/workspace_controller.dart';
 import 'money_utils.dart';
@@ -388,7 +389,7 @@ class _MoneyEditorState extends State<MoneyEditor> {
                 ),
               ],
               if (_error != null)
-                Text(_error!, style: const TextStyle(color: Color(0xFF99442F))),
+                Text(_error!, style: TextStyle(color: context.lc.danger)),
             ],
           ),
         ),

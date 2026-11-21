@@ -176,23 +176,20 @@ Session duration defaults to seven days. Sessions are not refreshed indefinitely
 
 The signed-in user can access `/api/ai`. Write requests use the same origin checks as workspace routes.
 
-- `GET /api/ai/status`: local Ollama status, installed model names, and the default local model.
+- `GET /api/ai/status`: `{ lifeos: { available, providers, dailyLimit, message } }`. The apps hide AI while `available` is false.
 - `GET /api/ai/knowledge`: the user's saved knowledge documents.
 - `POST /api/ai/knowledge`: save `{ title, topic, content }`. Topic is `workouts`, `routines`, or `spending`.
 - `DELETE /api/ai/knowledge/:id`: remove one owned knowledge document.
 - `POST /api/ai/chat`: answer a question using selected private saved data.
 
-Chat fields are `provider`, `model`, `question`, `topics`, and optional `history`.
-`provider` is `local`, `openai`, or `bedrock`.
+Chat fields are `question`, `topics`, `cloudConsent: true`, optional `provider: 'lifeos'` and optional `history`.
 `history` contains at most three alternating user/assistant pairs, with 1,000 characters per message.
-Cloud requests also require `cloudConsent: true` and `credentials`.
-OpenAI credentials contain `apiKey`.
-Bedrock credentials contain `region`, `accessKeyId`, `secretAccessKey`, and optional `sessionToken`.
-Local requests reject credential fields and never fall back to the cloud.
-Responses include `answer`, `provider`, `model`, `sources`, scanned `counts`, and `limited`.
-Only one answer may run per user at a time. Chat is limited to 12 requests per minute per client IP.
-Provider calls time out after two minutes. AI request bodies have a 64 KB limit.
-Keys and chat are not persisted. Cloud keys require HTTPS for non-loopback clients.
+Only the free server-side LifeOS AI is offered. There is no local model and no bring-your-own key.
+Responses include `answer`, `provider`, `model`, `remainingToday`, `sources`, scanned `counts`, and `limited`.
+Only one answer may run per user at a time. Chat is limited to 12 requests per minute per user.
+AI request bodies have a 64 KB limit. Chat is not persisted.
+`POST /api/ai/act` (Tell LifeOS) returns `{ reply, proposal? }`; save a proposal by POSTing
+`proposal.values` to `/api${proposal.path}` (for spending that is `/api/money/txns`).
 See [Personal AI](PERSONAL_AI.md) for setup, privacy, retrieval limits, and examples.
 
 ## Before deploying publicly

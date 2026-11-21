@@ -3,19 +3,19 @@ import 'package:flutter/foundation.dart';
 import 'auth_api.dart';
 import 'google_identity.dart';
 import 'token_store.dart';
-import '../spending/notification_bridge.dart';
+import '../money/capture/capture_bridge.dart';
 
 class AuthController extends ChangeNotifier {
   AuthController({
     required this.api,
     required this.tokenStore,
     required this.google,
-    NotificationBridge? notifications,
-  }) : notifications = notifications ?? NotificationBridge();
+    CaptureBridge? capture,
+  }) : capture = capture ?? CaptureBridge();
   final AuthApi api;
   final TokenStore tokenStore;
   final GoogleIdentity google;
-  final NotificationBridge notifications;
+  final CaptureBridge capture;
   Account? account;
   String? error;
   bool busy = false;
@@ -67,7 +67,7 @@ class AuthController extends ChangeNotifier {
       error = 'Unable to restore your secure session. Please sign in again.';
     } finally {
       if (account != null || _token == null) {
-        await notifications.configure(
+        await capture.configure(
           baseUrl: api.baseUrl,
           userId: account?.id,
           token: account == null ? null : _token,
@@ -91,7 +91,7 @@ class AuthController extends ChangeNotifier {
     }
     _token = session.token;
     account = session.account;
-    await notifications.configure(
+    await capture.configure(
       baseUrl: api.baseUrl,
       userId: account!.id,
       token: _token,
@@ -149,7 +149,7 @@ class AuthController extends ChangeNotifier {
     }
   });
   Future<void> logout() => _perform(() async {
-    await notifications.configure(baseUrl: api.baseUrl);
+    await capture.configure(baseUrl: api.baseUrl);
     if (_token != null) await api.logout(_token!);
     await tokenStore.delete();
     _token = null;
@@ -184,7 +184,7 @@ class AuthController extends ChangeNotifier {
     account = null;
     var cleanupFailed = false;
     for (final cleanup in <Future<void> Function()>[
-      () => notifications.clearAccount(baseUrl: api.baseUrl),
+      () => capture.clearAccount(baseUrl: api.baseUrl),
       tokenStore.delete,
       google.signOut,
     ]) {
@@ -207,6 +207,22 @@ class AuthController extends ChangeNotifier {
   }) => _authenticatedRequest(
     (token) => api.workspace(path, token, method: method, body: body),
   );
+
+  Future<Map<String, dynamic>> moneyRequest(
+    String path, {
+    String method = 'GET',
+    Map<String, dynamic>? body,
+  }) => _authenticatedRequest(
+    (token) => api.money(path, token, method: method, body: body),
+  );
+
+  Future<Uint8List> moneyBytes(String path) async {
+    final token = _token;
+    if (token == null) {
+      throw const ApiException('Please sign in again.', status: 401);
+    }
+    return api.moneyBytes(path, token);
+  }
 
   Future<Map<String, dynamic>> aiRequest(
     String path, {
@@ -234,7 +250,7 @@ class AuthController extends ChangeNotifier {
       if (failure.status == 401 && token == _token) {
         _token = null;
         account = null;
-        await notifications.configure(baseUrl: api.baseUrl);
+        await capture.configure(baseUrl: api.baseUrl);
         error = failure.message;
         try {
           await tokenStore.delete();

@@ -4,7 +4,8 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { hashToken } from '../src/auth.js';
 import { buildAiContext } from '../src/ai-context.js';
-import { createAiProviders, validateOllamaUrl } from '../src/ai-providers.js';
+import { createMemoryMoneyStore } from '../src/money/memory-store.js';
+import { newTxn } from '../src/money/service.js';
 
 function fixture({ answer, cloudAi } = {}) {
   const tokens = ['a'.repeat(43), 'b'.repeat(43)];
@@ -58,17 +59,26 @@ function fixture({ answer, cloudAi } = {}) {
       return true;
     },
   };
-  const providers = {
-    status: async () => ({
+  // Stands in for the free server-side "LifeOS AI" (the only AI the server offers).
+  const fakeCloud = {
+    available: () => true,
+    status: () => ({
       available: true,
-      models: ['llama3.2:3b'],
-      message: 'Ready',
+      providers: ['test'],
+      dailyLimit: 30,
+      message: 'LifeOS AI is ready.',
     }),
+    spend: async () => ({ used: 1, remaining: 29 }),
+    ai: {},
     answer: async (values) => {
       calls.push(values);
-      return answer ? answer(values) : 'You saved one workout. [S1]';
+      const text = answer
+        ? await answer(values)
+        : 'You saved one workout. [S1]';
+      return { text, provider: 'test', quota: { remaining: 29 } };
     },
   };
+  const money = createMemoryMoneyStore();
   const app = createApp({
     config: {
       webOrigins: ['http://localhost:5173'],
@@ -91,9 +101,9 @@ function fixture({ answer, cloudAi } = {}) {
     },
     verifyGoogle: async () => {},
     workspaces: store,
+    money,
     aiKnowledge: knowledge,
-    aiProviders: providers,
-    ...(cloudAi ? { cloudAi } : {}),
+    cloudAi: cloudAi ?? fakeCloud,
   });
   const call = (method, path, owner = 0) => {
     const agent = request(app);
@@ -101,11 +111,11 @@ function fixture({ answer, cloudAi } = {}) {
       .set('X-Client-Type', 'mobile')
       .set('Authorization', `Bearer ${tokens[owner]}`);
   };
-  return { app, call, calls, store, knowledge, documents };
+  return { app, call, calls, store, money, knowledge, documents };
 }
 const localQuestion = {
-  provider: 'local',
-  model: 'llama3.2:3b',
+  provider: 'lifeos',
+  cloudConsent: true,
   topics: ['workouts'],
   question: 'What workouts have I saved?',
 };
@@ -114,7 +124,7 @@ test('AI requires an authenticated session and isolates personal data', async ()
   const { app, call, calls } = fixture();
   await request(app).get('/api/ai/status').expect(401);
   const result = await call('post', '/chat').send(localQuestion).expect(200);
-  assert.equal(result.body.provider, 'local');
+  assert.equal(result.body.provider, 'lifeos');
   assert.equal(result.body.counts.workouts, 1);
   assert.match(calls[0].system, /My leg day/);
   assert.doesNotMatch(calls[0].system, /PRIVATE OTHER USER/);
@@ -151,34 +161,28 @@ test('knowledge persists per user and cannot be read or deleted by another user'
   assert.doesNotMatch(calls[1].system, /Example Cream/);
 });
 
-test('cloud needs explicit consent and credentials, and local rejects secrets', async () => {
+test('only LifeOS AI is offered: local models and your own keys are gone', async () => {
   const { call, calls, documents } = fixture();
-  await call('post', '/chat')
-    .send({
-      ...localQuestion,
-      provider: 'openai',
-      credentials: { apiKey: 'private-api-key' },
-    })
-    .expect(400);
-  await call('post', '/chat')
-    .send({ ...localQuestion, provider: 'bedrock', cloudConsent: true })
-    .expect(400);
+  for (const provider of ['local', 'openai', 'bedrock'])
+    await call('post', '/chat')
+      .send({ ...localQuestion, provider })
+      .expect(400);
   await call('post', '/chat')
     .send({ ...localQuestion, credentials: { apiKey: 'private-api-key' } })
     .expect(400);
-  const result = await call('post', '/chat')
-    .send({
-      ...localQuestion,
-      provider: 'openai',
-      model: 'gpt-4.1-mini',
-      cloudConsent: true,
-      credentials: { apiKey: 'private-api-key' },
-    })
-    .expect(200);
-  assert.equal(calls[0].credentials.apiKey, 'private-api-key');
-  assert.doesNotMatch(calls[0].system, /private-api-key/);
-  assert.doesNotMatch(JSON.stringify(result.body), /private-api-key/);
+  await call('post', '/chat')
+    .send({ ...localQuestion, cloudConsent: undefined })
+    .expect(400);
+  assert.equal(calls.length, 0);
   assert.equal(documents.length, 0);
+  const status = await call('get', '/status').expect(200);
+  assert.deepEqual(Object.keys(status.body), ['lifeos']);
+  assert.deepEqual(Object.keys(status.body.lifeos).sort(), [
+    'available',
+    'dailyLimit',
+    'message',
+    'providers',
+  ]);
 });
 
 test('topic selection excludes other topics and unknown client data is rejected', async () => {
@@ -246,30 +250,43 @@ test('one in-flight answer per user and lock releases after completion', async (
   await call('post', '/chat').send(localQuestion).expect(200);
 });
 
-test('context sums minor amounts exactly and keeps prompts bounded', async () => {
-  const store = {
-    listForAi: async (collection) =>
-      collection === 'expenses'
-        ? [
-            {
-              id: 'first',
-              title: 'Food',
-              date: '2026-10-07',
-              amountMinor: 101,
-              category: 'Food',
-            },
-            {
-              id: 'second',
-              title: 'Tea',
-              date: '2026-10-07',
-              amountMinor: 202,
-              category: 'Food',
-            },
-          ]
-        : [],
-  };
+test('context reads Money v2, sums my own part exactly and keeps prompts bounded', async () => {
+  const money = createMemoryMoneyStore();
+  const add = (values) =>
+    money.create(
+      'txns',
+      'owner',
+      newTxn({
+        date: '2026-10-07',
+        direction: 'debit',
+        category: 'Food',
+        ...values,
+      }),
+    );
+  await add({ title: 'Food', amountMinor: 101 });
+  await add({ title: 'Tea', amountMinor: 202 });
+  // Rahul's share of a split, a self-transfer and a deleted row never count as my spending.
+  await add({
+    title: 'Dinner',
+    amountMinor: 900,
+    peerShareMinor: 600,
+    peerTag: 'split',
+  });
+  await add({ title: 'To SBI', amountMinor: 50000, isTransfer: true });
+  await add({ title: 'Gone', amountMinor: 70000, deleted: true });
+  await money.create(
+    'txns',
+    'someone-else',
+    newTxn({
+      date: '2026-10-07',
+      direction: 'debit',
+      title: 'Theirs',
+      amountMinor: 999,
+    }),
+  );
   const context = await buildAiContext({
-    store,
+    store: { listForAi: async () => [] },
+    money,
     knowledge: {
       list: async () => [
         {
@@ -285,7 +302,9 @@ test('context sums minor amounts exactly and keeps prompts bounded', async () =>
     question: 'Budget',
     now: new Date('2026-10-07T12:00:00Z'),
   });
-  assert.match(context.context, /INR 3.03/);
+  assert.match(context.context, /INR 6.03/);
+  assert.doesNotMatch(context.context, /Gone|Theirs/);
+  assert.equal(context.counts.txns, 4);
   assert.ok(context.context.length < 15000);
   assert.ok(context.sources.length <= 13);
 });
@@ -311,147 +330,6 @@ test('context reports scanned-record limits instead of implying all-time totals'
   assert.match(context.context, /"limited":true/);
 });
 
-test('Ollama endpoint is restricted to numeric loopback addresses', () => {
-  assert.equal(
-    validateOllamaUrl('http://127.0.0.1:11434'),
-    'http://127.0.0.1:11434',
-  );
-  for (const url of [
-    'https://cloud.example.com',
-    'http://169.254.169.254',
-    'http://localhost:11434',
-    'http://127.0.0.1:11434/path',
-    'http://key@127.0.0.1:11434',
-  ])
-    assert.throws(() => validateOllamaUrl(url));
-});
-
-test('local provider only calls loopback and blocks cloud-named and aliased remote models', async () => {
-  const calls = [];
-  const fetchImpl = async (url, options) => {
-    calls.push({ url, ...options });
-    return Response.json(
-      url.endsWith('/api/show')
-        ? { model_info: { architecture: 'llama' } }
-        : { message: { content: 'Local answer' } },
-    );
-  };
-  const providers = createAiProviders({ fetchImpl });
-  assert.equal(
-    await providers.answer({
-      ...localQuestion,
-      system: 'personal data',
-      messages: [{ role: 'user', content: 'hello' }],
-    }),
-    'Local answer',
-  );
-  assert.ok(
-    calls.every((entry) => entry.url.startsWith('http://127.0.0.1:11434/')),
-  );
-  assert.equal(calls[1].redirect, 'error');
-  assert.equal(JSON.parse(calls[1].body).stream, false);
-  await assert.rejects(
-    providers.answer({ ...localQuestion, model: 'llama:cloud' }),
-    /local model/,
-  );
-  const remote = createAiProviders({
-    fetchImpl: async () =>
-      Response.json({
-        remote_host: 'https://ollama.com',
-        remote_model: 'hidden-cloud',
-      }),
-  });
-  await assert.rejects(
-    remote.answer({ ...localQuestion, model: 'innocent-alias' }),
-    /forwards to the cloud/,
-  );
-});
-
-test('OpenAI uses the fixed HTTPS endpoint, disables response storage, and redacts errors', async () => {
-  let sent;
-  const providers = createAiProviders({
-    fetchImpl: async (url, options) => {
-      sent = { url, ...options };
-      return Response.json({
-        choices: [{ message: { content: 'Cloud answer' } }],
-      });
-    },
-  });
-  const values = {
-    provider: 'openai',
-    model: 'gpt-4.1-mini',
-    credentials: { apiKey: 'secret' },
-    system: 'system',
-    messages: [{ role: 'user', content: 'question' }],
-  };
-  assert.equal(await providers.answer(values), 'Cloud answer');
-  assert.equal(sent.url, 'https://api.openai.com/v1/chat/completions');
-  assert.equal(JSON.parse(sent.body).store, false);
-  assert.equal(sent.headers.Authorization, 'Bearer secret');
-  const rejected = createAiProviders({
-    fetchImpl: async () =>
-      Response.json({ error: { message: 'secret' } }, { status: 401 }),
-  });
-  await assert.rejects(
-    rejected.answer(values),
-    (error) => error.status === 502 && !error.message.includes('secret'),
-  );
-});
-
-test('Bedrock sends Converse requests with explicit temporary credentials and destroys clients', async () => {
-  let options;
-  let command;
-  let destroyed = false;
-  const providers = createAiProviders({
-    createBedrockClient: (values) => {
-      options = values;
-      return {
-        send: async (value) => {
-          command = value.input;
-          return {
-            output: { message: { content: [{ text: 'Bedrock answer' }] } },
-          };
-        },
-        destroy: () => {
-          destroyed = true;
-        },
-      };
-    },
-  });
-  const result = await providers.answer({
-    provider: 'bedrock',
-    model: 'model-id',
-    credentials: {
-      region: 'us-east-1',
-      accessKeyId: 'ACCESSKEY',
-      secretAccessKey: 'secret',
-      sessionToken: 'temporary',
-    },
-    system: 'safe instructions',
-    messages: [{ role: 'user', content: 'question' }],
-  });
-  assert.equal(result, 'Bedrock answer');
-  assert.equal(options.credentials.sessionToken, 'temporary');
-  assert.deepEqual(command.messages[0], {
-    role: 'user',
-    content: [{ text: 'question' }],
-  });
-  assert.equal(command.system[0].text, 'safe instructions');
-  assert.equal(destroyed, true);
-});
-
-test('AI status handles offline Ollama and model errors without leaking data', async () => {
-  const providers = createAiProviders({
-    fetchImpl: async () => {
-      throw new Error('private network detail');
-    },
-  });
-  const status = await providers.status();
-  assert.equal(status.available, false);
-  assert.deepEqual(status.models, []);
-  assert.doesNotMatch(status.message, /private network detail/);
-});
-
 // ---- "LifeOS AI": free server-side models ----
 import { createCloudAi } from '../src/ai-cloud.js';
 
@@ -472,10 +350,20 @@ test('LifeOS AI answers with server keys, falls back between providers and count
   const seen = [];
   const fetchImpl = async (url, init) => {
     seen.push({ url, body: JSON.parse(init.body) });
-    if (url.includes('groq')) return { ok: false, status: 429, json: async () => ({}), text: async () => 'busy' };
+    if (url.includes('groq'))
+      return {
+        ok: false,
+        status: 429,
+        json: async () => ({}),
+        text: async () => 'busy',
+      };
     return reply('You saved one workout: My leg day. [S1]');
   };
-  const cloudAi = createCloudAi({ env: { GROQ_API_KEY: 'g', GEMINI_API_KEY: 'm' }, dailyLimit: 2, fetchImpl });
+  const cloudAi = createCloudAi({
+    env: { GROQ_API_KEY: 'g', GEMINI_API_KEY: 'm' },
+    dailyLimit: 2,
+    fetchImpl,
+  });
   const { call } = fixture({ cloudAi });
   const status = await call('get', '/status').expect(200);
   assert.equal(status.body.lifeos.available, true);
@@ -503,7 +391,12 @@ test('LifeOS AI without server keys says so clearly', async () => {
 });
 
 test('LifeOS AI requires the cloud consent flag', async () => {
-  const { call } = fixture({ cloudAi: createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl: async () => reply('x') }) });
+  const { call } = fixture({
+    cloudAi: createCloudAi({
+      env: { GROQ_API_KEY: 'g' },
+      fetchImpl: async () => reply('x'),
+    }),
+  });
   const withoutConsent = { ...lifeosQuestion };
   delete withoutConsent.cloudConsent;
   await call('post', '/chat').send(withoutConsent).expect(400);
@@ -513,7 +406,22 @@ test('LifeOS AI requires the cloud consent flag', async () => {
 const toolCall = (name, args) => ({
   ok: true,
   status: 200,
-  json: async () => ({ choices: [{ message: { content: '', tool_calls: [{ id: 't1', type: 'function', function: { name, arguments: JSON.stringify(args) } }] } }] }),
+  json: async () => ({
+    choices: [
+      {
+        message: {
+          content: '',
+          tool_calls: [
+            {
+              id: 't1',
+              type: 'function',
+              function: { name, arguments: JSON.stringify(args) },
+            },
+          ],
+        },
+      },
+    ],
+  }),
   text: async () => '',
 });
 
@@ -521,51 +429,116 @@ test('Tell LifeOS turns a sentence into a proposed expense, without saving it', 
   const bodies = [];
   const fetchImpl = async (_url, init) => {
     bodies.push(JSON.parse(init.body));
-    return toolCall('add_expense', { title: 'Lunch with Rahul', amount: 250, category: 'Food', date: '2026-11-10', payment: 'UPI' });
+    return toolCall('add_expense', {
+      title: 'Lunch with Rahul',
+      amount: 250,
+      category: 'Food',
+      date: '2026-11-10',
+      payment: 'UPI',
+    });
   };
   const cloudAi = createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl });
-  const { call, store } = fixture({ cloudAi });
-  store.list = async () => [];
-  const result = await call('post', '/act').send({ message: 'spent 250 on lunch with Rahul yesterday', today: '2026-11-11' }).expect(200);
-  assert.equal(result.body.proposal.collection, 'expenses');
+  const { call, money } = fixture({ cloudAi });
+  const result = await call('post', '/act')
+    .send({
+      message: 'spent 250 on lunch with Rahul yesterday',
+      today: '2026-11-11',
+    })
+    .expect(200);
+  assert.equal(result.body.proposal.collection, 'txns');
+  assert.equal(result.body.proposal.path, '/money/txns');
   assert.deepEqual(result.body.proposal.values, {
-    title: 'Lunch with Rahul', date: '2026-11-10', amountMinor: 25000, category: 'Food', payment: 'UPI', note: '',
+    date: '2026-11-10',
+    amountMinor: 25000,
+    direction: 'debit',
+    title: 'Lunch with Rahul',
+    category: 'Food',
+    channel: 'UPI',
+    note: '',
   });
+  assert.equal(
+    (await money.list('txns', 'owner-1')).length,
+    0,
+    'nothing is saved before the user confirms',
+  );
   assert.match(result.body.reply, /₹250/);
   assert.match(bodies[0].messages[0].content, /Today is 2026-11-11/);
   assert.ok(bodies[0].tools.some((t) => t.function.name === 'add_expense'));
 });
 
-test('Tell LifeOS answers spending questions from the user\'s own expenses only', async () => {
+test("Tell LifeOS answers spending questions from the user's own Money data only", async () => {
   let step = 0;
   const fetchImpl = async (_url, init) => {
     step += 1;
-    if (step === 1) return toolCall('spending_summary', { from: '2026-11-01', to: '2026-11-30', category: 'Food' });
+    if (step === 1)
+      return toolCall('spending_summary', {
+        from: '2026-11-01',
+        to: '2026-11-30',
+        category: 'Food',
+      });
     const tool = JSON.parse(init.body).messages.find((m) => m.role === 'tool');
     const data = JSON.parse(tool.content);
     return reply(`You spent ${data.total} on food.`);
   };
   const cloudAi = createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl });
-  const { call, store } = fixture({ cloudAi });
-  const lists = [];
-  store.list = async (collection, owner) => {
-    lists.push(owner);
-    return [
-      { title: 'Lunch', date: '2026-11-03', amountMinor: 25000, category: 'Food' },
-      { title: 'Dinner', date: '2026-11-05', amountMinor: 50050, category: 'Food' },
-      { title: 'Cab', date: '2026-11-05', amountMinor: 30000, category: 'Travel' },
-      { title: 'Old', date: '2026-10-05', amountMinor: 99900, category: 'Food' },
-    ];
-  };
-  const result = await call('post', '/act').send({ message: 'how much on food this month?', today: '2026-11-11' }).expect(200);
+  const { call, money } = fixture({ cloudAi });
+  const add = (owner, values) =>
+    money.create(
+      'txns',
+      owner,
+      newTxn({ direction: 'debit', category: 'Food', ...values }),
+    );
+  await add('owner-1', {
+    title: 'Lunch',
+    date: '2026-11-03',
+    amountMinor: 25000,
+  });
+  await add('owner-1', {
+    title: 'Dinner',
+    date: '2026-11-05',
+    amountMinor: 100100,
+    peerShareMinor: 50050,
+    peerTag: 'split',
+  });
+  await add('owner-1', {
+    title: 'Cab',
+    date: '2026-11-05',
+    amountMinor: 30000,
+    category: 'Travel',
+  });
+  await add('owner-1', {
+    title: 'Old',
+    date: '2026-10-05',
+    amountMinor: 99900,
+  });
+  await add('owner-2', {
+    title: 'Theirs',
+    date: '2026-11-05',
+    amountMinor: 77700,
+  });
+  const result = await call('post', '/act')
+    .send({ message: 'how much on food this month?', today: '2026-11-11' })
+    .expect(200);
   assert.equal(result.body.reply, 'You spent ₹750.5 on food.');
-  assert.deepEqual(lists, ['owner-1']);
 });
 
 test('Tell LifeOS rejects an invalid proposal instead of showing it', async () => {
-  const fetchImpl = async () => toolCall('add_expense', { title: 'Weird', amount: -5, category: 'Food', date: 'not-a-date' });
-  const { call } = fixture({ cloudAi: createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl }) });
-  const result = await call('post', '/act').send({ message: 'spent minus five', today: '2026-11-11' }).expect(200);
+  const fetchImpl = async () =>
+    toolCall('add_expense', {
+      title: 'Weird',
+      amount: -5,
+      category: 'Food',
+      date: 'not-a-date',
+    });
+  const { call } = fixture({
+    cloudAi: createCloudAi({ env: { GROQ_API_KEY: 'g' }, fetchImpl }),
+  });
+  const result = await call('post', '/act')
+    .send({ message: 'spent minus five', today: '2026-11-11' })
+    .expect(200);
   assert.equal(result.body.proposal, undefined);
-  assert.match(result.body.reply, /couldn't turn that into a valid entry|Done|amount/i);
+  assert.match(
+    result.body.reply,
+    /couldn't turn that into a valid entry|Done|amount/i,
+  );
 });

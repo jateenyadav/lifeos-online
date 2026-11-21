@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { readConfig } from './config.js';
 import { User } from './models.js';
+import { workspaceModels, mongoWorkspaces } from './workspace-models.js';
+import { moneyModels, mongoMoney } from './money/store-mongo.js';
+import { seedDemo } from './demo-data.js';
 
 const config = readConfig();
 if (config.production)
@@ -26,7 +29,13 @@ const seed = z
 
 try {
   await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 10000 });
-  await User.createIndexes();
+  await Promise.all(
+    [
+      User,
+      ...Object.values(workspaceModels),
+      ...Object.values(moneyModels),
+    ].map((model) => model.createIndexes()),
+  );
   const loginId = seed.SEED_LOGIN_ID.toLowerCase();
   const email = seed.SEED_EMAIL.toLowerCase();
   const existing = await User.findOne({ $or: [{ loginId }, { email }] });
@@ -35,14 +44,16 @@ try {
       'Seed account already exists; its password and profile were not changed.',
     );
   } else {
-    await User.create({
+    const user = await User.create({
       loginId,
       email,
       name: seed.SEED_NAME,
       passwordHash: await bcrypt.hash(seed.SEED_PASSWORD, 12),
     });
+    // Same sample data as "Try the demo": notes, workouts, routines and the Money v2 story.
+    await seedDemo(mongoWorkspaces, String(user._id), mongoMoney);
     console.log(
-      `Created learning account with ID: ${loginId}. Use SEED_PASSWORD from server/.env.`,
+      `Created learning account with ID: ${loginId} and sample data. Use SEED_PASSWORD from server/.env.`,
     );
   }
 } finally {

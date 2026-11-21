@@ -1,49 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  BrainCircuit,
-  PowerOff,
-  Send,
-  Sparkles,
-  Trash2,
-  User,
-} from 'lucide-react';
+import { BrainCircuit, Send, Sparkles, Trash2, User } from 'lucide-react';
 import { apiRequest } from '../api.js';
 import { Field, SpaceHeading } from './shared.jsx';
-import { cloudConnectionSafe } from './ai-utils.js';
 import TellLifeOS from './TellLifeOS.jsx';
 import './personal-ai.css';
 
 const labels = {
   workouts: 'Workouts',
   routines: 'Daily routines & skin care',
-  spending: 'Spending',
-};
-const emptyKeys = {
-  apiKey: '',
-  region: 'us-east-1',
-  accessKeyId: '',
-  secretAccessKey: '',
-  sessionToken: '',
+  spending: 'Money',
 };
 
-export default function PersonalAi({ onSessionExpired }) {
-  const safeCloud = cloudConnectionSafe(
-    window.location.href,
-    import.meta.env.VITE_API_URL || '/api',
-  );
-  // "lifeos" = free cloud models with keys kept on the server (default when the server has keys).
-  const [provider, setProvider] = useState('lifeos');
-  const [lifeos, setLifeos] = useState(null);
-  const byok = provider === 'openai' || provider === 'bedrock';
-  const [models, setModels] = useState({
-    local: 'llama3.2:3b',
-    openai: 'gpt-4.1-mini',
-    bedrock: '',
-  });
-  const [keys, setKeys] = useState(emptyKeys);
+export default function PersonalAi({ onSessionExpired, aiStatus }) {
+  const [lifeos, setLifeos] = useState(aiStatus ?? null);
   const [consent, setConsent] = useState(false);
   const [topics, setTopics] = useState(Object.keys(labels));
-  const [status, setStatus] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [draft, setDraft] = useState({
     title: '',
@@ -71,10 +42,7 @@ export default function PersonalAi({ onSessionExpired }) {
     ])
       .then(([result, knowledge]) => {
         if (controller.signal.aborted) return;
-        setStatus(result.local);
         setLifeos(result.lifeos ?? null);
-        if (!result.lifeos?.available) setProvider('local');
-        setModels((previous) => ({ ...previous, local: result.defaultModel }));
         setDocuments(knowledge.documents);
       })
       .catch((failure) => {
@@ -111,13 +79,6 @@ export default function PersonalAi({ onSessionExpired }) {
     }
   }
 
-  function changeProvider(value) {
-    setProvider(value);
-    setKeys(emptyKeys);
-    setConsent(false);
-    setMessages([]);
-    setError('');
-  }
   function changeTopic(value) {
     setTopics((previous) =>
       previous.includes(value)
@@ -127,58 +88,19 @@ export default function PersonalAi({ onSessionExpired }) {
     setConsent(false);
     setMessages([]);
   }
-  function secretField(label, name, secret = true) {
-    return (
-      <Field label={label}>
-        <input
-          type={secret ? 'password' : 'text'}
-          disabled={!safeCloud}
-          autoComplete="off"
-          spellCheck={false}
-          required={name !== 'sessionToken'}
-          value={keys[name]}
-          onChange={(event) => setKeys({ ...keys, [name]: event.target.value })}
-        />
-      </Field>
-    );
-  }
   function ask(event) {
     event.preventDefault();
-    if (byok && !safeCloud) {
-      setError(
-        'Cloud keys need an HTTPS page and backend, or a connection on this computer only. Use local AI here.',
-      );
-      return;
-    }
-    if (
-      !topics.length ||
-      !question.trim() ||
-      (provider !== 'local' && !consent)
-    )
-      return;
+    if (!topics.length || !question.trim() || !consent) return;
     const body = {
-      provider,
-      ...(provider === 'lifeos' ? {} : { model: models[provider] }),
+      provider: 'lifeos',
       topics,
       question: question.trim(),
+      cloudConsent: true,
       history: messages.slice(-6).map((entry) => ({
         role: entry.role,
         content: entry.content.slice(0, 1000),
       })),
     };
-    if (provider === 'lifeos') body.cloudConsent = true;
-    if (byok) {
-      body.cloudConsent = true;
-      body.credentials =
-        provider === 'openai'
-          ? { apiKey: keys.apiKey }
-          : {
-              region: keys.region,
-              accessKeyId: keys.accessKeyId,
-              secretAccessKey: keys.secretAccessKey,
-              ...(keys.sessionToken ? { sessionToken: keys.sessionToken } : {}),
-            };
-    }
     perform(async () => {
       const result = await apiRequest('/ai/chat', { method: 'POST', body });
       if (!active.current) return;
@@ -244,7 +166,7 @@ export default function PersonalAi({ onSessionExpired }) {
       <SpaceHeading
         eyebrow="YOUR PERSONAL KNOWLEDGE"
         title="Personal AI"
-        description="Ask about your workouts, routines, skin care, and spending. LifeOS AI is free and needs no key. Local AI and your own keys are optional."
+        description="Ask about your workouts, routines, skin care and money. LifeOS AI is free and needs no key."
       />
       <div className="ai-intro">
         <BrainCircuit size={23} />
@@ -266,136 +188,29 @@ export default function PersonalAi({ onSessionExpired }) {
         </p>
       )}
       {lifeos?.available && <TellLifeOS onSessionExpired={onSessionExpired} />}
-      {lifeos && !lifeos.available && (
-        <div className="ai-off" role="note">
-          <span className="ai-off-icon" aria-hidden="true">
-            <PowerOff size={20} />
-          </span>
-          <div>
-            <strong>LifeOS AI is switched off on this server.</strong>
-            <p>
-              The free cloud AI and Tell LifeOS need a server key that is not
-              set yet. Everything else works. You can still ask with Local AI
-              (Ollama) or your own key below.
-            </p>
-          </div>
-        </div>
-      )}
       <div className="ai-layout">
         <section className="ai-card">
           <h2>
             <BrainCircuit size={20} aria-hidden="true" /> Talk to your AI
           </h2>
-          {loading && <p role="status">Checking local AI...</p>}
+          {loading && <p role="status">Loading your AI space…</p>}
           <form onSubmit={ask}>
             <fieldset disabled={busy || loading} className="ai-controls">
-              <Field label="AI connection">
-                <select
-                  value={provider}
-                  onChange={(event) => changeProvider(event.target.value)}
-                >
-                  {lifeos?.available && (
-                    <option value="lifeos">LifeOS AI (free, no key)</option>
-                  )}
-                  <option value="local">Local AI (Ollama, no key)</option>
-                  <option value="openai">OpenAI API key (cloud)</option>
-                  <option value="bedrock">
-                    AWS Bedrock access keys (cloud)
-                  </option>
-                </select>
-              </Field>
-              {provider === 'local' && (
-                <div className="ai-status">
-                  <p>{status?.message || 'Local AI status is not loaded.'}</p>
-                  <code>ollama pull llama3.2:3b</code>
-                  <p>
-                    Run Ollama with OLLAMA_NO_CLOUD=1. Keep MongoDB on this
-                    computer too.
-                  </p>
-                  <button
-                    type="button"
-                    className="space-secondary"
-                    onClick={() =>
-                      perform(async () => {
-                        const result = await apiRequest('/ai/status');
-                        if (active.current) {
-                          setStatus(result.local);
-                          setLoading(false);
-                        }
-                      })
-                    }
-                  >
-                    Check local AI
-                  </button>
-                </div>
-              )}
-              {provider === 'lifeos' && (
-                <div className="ai-status">
-                  <p>
-                    Free cloud models run by LifeOS. Up to{' '}
-                    {lifeos?.dailyLimit ?? 30} questions a day
-                    {typeof lifeos?.remaining === 'number'
-                      ? `, ${lifeos.remaining} left today`
-                      : ''}
-                    .
-                  </p>
-                </div>
-              )}
-              {provider !== 'lifeos' && (
-                <Field label="Model ID">
-                  <input
-                    required
-                    maxLength={300}
-                    value={models[provider]}
-                    list={provider === 'local' ? 'ai-local-models' : undefined}
-                    placeholder={
-                      provider === 'bedrock'
-                        ? 'Your Bedrock model or inference profile ID'
-                        : undefined
-                    }
-                    onChange={(event) =>
-                      setModels({ ...models, [provider]: event.target.value })
-                    }
-                  />
-                </Field>
-              )}
-              <datalist id="ai-local-models">
-                {(status?.models ?? []).map((model) => (
-                  <option key={model} value={model} />
-                ))}
-              </datalist>
-              {provider === 'openai' && secretField('OpenAI API key', 'apiKey')}
-              {provider === 'bedrock' && (
-                <>
-                  {secretField('AWS region', 'region', false)}
-                  {secretField('AWS access key ID', 'accessKeyId')}
-                  {secretField('AWS secret access key', 'secretAccessKey')}
-                  {secretField('AWS session token (optional)', 'sessionToken')}
-                </>
-              )}
-              {provider === 'lifeos' && (
-                <p className="ai-warning">
-                  LifeOS AI sends your question, recent chat, and the selected
-                  data excerpts to free AI providers (Groq or Google Gemini) to
-                  write the answer.
+              <div className="ai-status">
+                <p>
+                  Free cloud models run by LifeOS. Up to{' '}
+                  {lifeos?.dailyLimit ?? 30} questions a day
+                  {typeof lifeos?.remaining === 'number'
+                    ? `, ${lifeos.remaining} left today`
+                    : ''}
+                  .
                 </p>
-              )}
-              {byok && (
-                <p className="ai-warning">
-                  Cloud mode sends your question, recent chat, and selected data
-                  excerpts to {provider === 'openai' ? 'OpenAI' : 'AWS Bedrock'}
-                  . Charges may apply. Keys stay in memory only. They clear when
-                  you leave this page or change provider. Use HTTPS on a real
-                  phone.
-                </p>
-              )}
-              {byok && !safeCloud && (
-                <p className="ai-warning" role="alert">
-                  Cloud keys are disabled on this HTTP connection. Use local AI,
-                  an HTTPS website and backend, or the localhost website on your
-                  computer.
-                </p>
-              )}
+              </div>
+              <p className="ai-warning">
+                LifeOS AI sends your question, recent chat, and the selected
+                data excerpts to free AI providers (Groq or Google Gemini) to
+                write the answer.
+              </p>
               <div className="ai-topics">
                 <strong>Data the AI may read</strong>
                 {Object.entries(labels).map(([topic, label]) => (
@@ -409,18 +224,14 @@ export default function PersonalAi({ onSessionExpired }) {
                   </label>
                 ))}
               </div>
-              {provider !== 'local' && (
-                <label className="ai-check">
-                  <input
-                    type="checkbox"
-                    checked={consent}
-                    disabled={byok && !safeCloud}
-                    onChange={(event) => setConsent(event.target.checked)}
-                  />
-                  I agree to send the selected data and chat to this cloud
-                  provider.
-                </label>
-              )}
+              <label className="ai-check">
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(event) => setConsent(event.target.checked)}
+                />
+                I agree to send the selected data and chat to LifeOS AI.
+              </label>
               <Field label="Your question">
                 <textarea
                   required
@@ -448,12 +259,7 @@ export default function PersonalAi({ onSessionExpired }) {
               </div>
               <button
                 className="space-primary"
-                disabled={
-                  !question.trim() ||
-                  !topics.length ||
-                  (provider !== 'local' && !consent) ||
-                  (byok && !safeCloud)
-                }
+                disabled={!question.trim() || !topics.length || !consent}
               >
                 <Send size={16} />
                 {busy ? 'AI is thinking...' : 'Ask AI'}
@@ -461,9 +267,7 @@ export default function PersonalAi({ onSessionExpired }) {
             </fieldset>
           </form>
           {busy && (
-            <p role="status">
-              Working... A local answer can take up to two minutes.
-            </p>
+            <p role="status">Working… this usually takes a few seconds.</p>
           )}
           <div
             className="ai-chat"
@@ -482,7 +286,7 @@ export default function PersonalAi({ onSessionExpired }) {
                 <strong>
                   {entry.role === 'user'
                     ? 'You'
-                    : `${{ local: 'Local AI', lifeos: 'LifeOS AI', openai: 'OpenAI', bedrock: 'AWS Bedrock' }[entry.provider] ?? 'AI'} · ${entry.model}`}
+                    : `LifeOS AI${entry.model ? ` · ${entry.model}` : ''}`}
                 </strong>
                 <p>{entry.content}</p>
                 {entry.sources && (

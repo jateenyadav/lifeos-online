@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
@@ -57,13 +58,6 @@ class AuthApi {
     return 'Cannot reach $baseUrl. Check your internet connection and that the backend is online.';
   }
 
-  bool get supportsCloudKeys {
-    final address = Uri.parse(baseUrl);
-    return address.scheme == 'https' ||
-        (address.scheme == 'http' &&
-            ['localhost', '127.0.0.1', '::1'].contains(address.host));
-  }
-
   Future<Map<String, dynamic>> workspace(
     String path,
     String token, {
@@ -76,20 +70,54 @@ class AuthApi {
     String token, {
     String method = 'GET',
     Map<String, dynamic>? body,
-  }) {
-    if (['openai', 'bedrock'].contains(body?['provider']) &&
-        !supportsCloudKeys) {
-      throw const ApiException(
-        'Cloud keys need an HTTPS backend, or a connection on this computer only. Use local AI here.',
-      );
+  }) => _request(
+    '/ai$path',
+    method: method,
+    body: body,
+    token: token,
+    timeout: const Duration(seconds: 130),
+  );
+
+  /// LifeOS Money v2 (docs/MONEY.md §4). Lists come back as `{items: [...]}`.
+  Future<Map<String, dynamic>> money(
+    String path,
+    String token, {
+    String method = 'GET',
+    Map<String, dynamic>? body,
+  }) => _request(
+    '/money$path',
+    method: method,
+    body: body,
+    token: token,
+    timeout: const Duration(seconds: 30),
+  );
+
+  /// Raw bytes (receipt and old-khata photos).
+  Future<Uint8List> moneyBytes(String path, String token) async {
+    try {
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/money$path'),
+            headers: {
+              'X-Client-Type': 'mobile',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          'This photo could not load.',
+          status: response.statusCode,
+        );
+      }
+      return response.bodyBytes;
+    } on TimeoutException {
+      throw const ApiException('This photo took too long to load.');
+    } on SocketException {
+      throw ApiException(_connectionError);
+    } on http.ClientException {
+      throw ApiException(_connectionError);
     }
-    return _request(
-      '/ai$path',
-      method: method,
-      body: body,
-      token: token,
-      timeout: const Duration(seconds: 130),
-    );
   }
 
   Future<Map<String, dynamic>> _request(
@@ -111,11 +139,23 @@ class AuthApi {
           .send(request)
           .then(http.Response.fromStream)
           .timeout(timeout);
-      if (response.statusCode == 204) return {};
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 204 || response.body.trim().isEmpty) {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return {};
+        }
+      }
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body);
+      final data = decoded is List
+          ? <String, dynamic>{'items': decoded}
+          : decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : throw const FormatException();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw ApiException(
           data['message'] as String? ??
+              data['error'] as String? ??
               'The server could not complete your request.',
           status: response.statusCode,
         );

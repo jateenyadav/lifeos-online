@@ -3,7 +3,6 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { ApiError } from './auth.js';
 import { aiTopics, buildAiContext } from './ai-context.js';
-import { createAiProviders } from './ai-providers.js';
 import { createCloudAi } from './ai-cloud.js';
 import { createAiActions } from './ai-actions.js';
 
@@ -52,62 +51,22 @@ const common = {
     .max(300)
     .regex(/^[a-zA-Z0-9._:/-]+$/),
 };
-const chatSchema = z.discriminatedUnion('provider', [
-  z.object({ ...common, provider: z.literal('local') }).strict(),
-  // Free server-side models: no key from the user, model chosen by the server.
-  z
-    .object({
-      ...common,
-      model: common.model.optional(),
-      provider: z.literal('lifeos'),
-      cloudConsent: z.literal(true),
-    })
-    .strict(),
-  z
-    .object({
-      ...common,
-      provider: z.literal('openai'),
-      cloudConsent: z.literal(true),
-      credentials: z
-        .object({
-          apiKey: z
-            .string()
-            .trim()
-            .min(1)
-            .max(500)
-            .regex(/^[\x21-\x7e]+$/),
-        })
-        .strict(),
-    })
-    .strict(),
-  z
-    .object({
-      ...common,
-      provider: z.literal('bedrock'),
-      cloudConsent: z.literal(true),
-      credentials: z
-        .object({
-          region: z.string().regex(/^[a-z]{2}(?:-[a-z]+)+-\d$/),
-          accessKeyId: z
-            .string()
-            .trim()
-            .min(1)
-            .max(128)
-            .regex(/^[A-Za-z0-9]+$/),
-          secretAccessKey: z.string().trim().min(1).max(200),
-          sessionToken: z.string().trim().max(4000).optional(),
-        })
-        .strict(),
-    })
-    .strict(),
-]);
+// Only the free server-side "LifeOS AI" is offered: no key from the user, model chosen by the server.
+const chatSchema = z
+  .object({
+    ...common,
+    model: common.model.optional(),
+    provider: z.literal('lifeos').default('lifeos'),
+    cloudConsent: z.literal(true),
+  })
+  .strict();
 
 export function createAiRouter({
   store,
+  money,
   knowledge,
   currentUser,
   config,
-  providers = createAiProviders({ ollamaUrl: config.ollamaUrl }),
   // Without explicit config (tests), never read real keys from the environment.
   cloud = createCloudAi(config.cloudAi ?? { env: {} }),
 }) {
@@ -122,12 +81,9 @@ export function createAiRouter({
       );
     next();
   });
+  // The web hides Personal AI and Tell LifeOS while available is false.
   router.get('/status', async (_request, response) =>
-    response.json({
-      local: await providers.status(),
-      lifeos: cloud.status(),
-      defaultModel: config.ollamaModel ?? 'llama3.2:3b',
-    }),
+    response.json({ lifeos: cloud.status() }),
   );
   router.get('/knowledge', async (request, response) =>
     response.json({ documents: await knowledge.list(request.aiUser.id) }),
@@ -152,7 +108,7 @@ export function createAiRouter({
       throw new ApiError(404, 'Knowledge entry not found.');
     response.status(204).end();
   });
-  const act = createAiActions({ store, cloud });
+  const act = createAiActions({ money, cloud });
   router.post(
     '/act',
     rateLimit({
@@ -161,7 +117,9 @@ export function createAiRouter({
       standardHeaders: 'draft-8',
       legacyHeaders: false,
       keyGenerator: (request) => `act:${request.aiUser.id}`,
-      message: { message: 'Too many AI requests. Wait a minute and try again.' },
+      message: {
+        message: 'Too many AI requests. Wait a minute and try again.',
+      },
     }),
     async (request, response) => response.json(await act(request)),
   );
@@ -180,17 +138,6 @@ export function createAiRouter({
     }),
     async (request, response) => {
       const values = chatSchema.parse(request.body);
-      if (
-        !['local', 'lifeos'].includes(values.provider) &&
-        !request.secure &&
-        !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(
-          request.socket.remoteAddress,
-        )
-      )
-        throw new ApiError(
-          400,
-          'Cloud keys need HTTPS when using a real phone or a remote browser. Use local AI or a secure server connection.',
-        );
       const userId = request.aiUser.id;
       if (activeUsers.has(userId))
         throw new ApiError(
@@ -201,6 +148,7 @@ export function createAiRouter({
       try {
         const context = await buildAiContext({
           store,
+          money,
           knowledge,
           userId,
           topics: values.topics,
@@ -211,22 +159,12 @@ export function createAiRouter({
           ...values.history,
           { role: 'user', content: values.question },
         ];
-        let answer;
-        let model = values.model;
-        let quota;
-        if (values.provider === 'lifeos') {
-          const result = await cloud.answer({ userId, system, messages });
-          answer = result.text;
-          model = result.provider;
-          quota = result.quota;
-        } else {
-          answer = await providers.answer({ ...values, system, messages });
-        }
+        const result = await cloud.answer({ userId, system, messages });
         response.json({
-          answer,
-          provider: values.provider,
-          model,
-          ...(quota ? { remainingToday: quota.remaining } : {}),
+          answer: result.text,
+          provider: 'lifeos',
+          model: result.provider,
+          remainingToday: result.quota.remaining,
           sources: context.sources,
           counts: context.counts,
           limited: context.limited,

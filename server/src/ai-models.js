@@ -63,7 +63,10 @@ export const mongoAiUsage = {
     const update = () =>
       AiUsage.findOneAndUpdate(
         { _id: key },
-        { $inc: { n: 1 }, $setOnInsert: { userId, expiresAt: new Date(now + windowMs) } },
+        {
+          $inc: { n: 1 },
+          $setOnInsert: { userId, expiresAt: new Date(now + windowMs) },
+        },
         { upsert: true, new: true, lean: true },
       );
     try {

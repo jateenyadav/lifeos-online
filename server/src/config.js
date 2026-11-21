@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { z } from 'zod';
-import { validateOllamaUrl } from './ai-providers.js';
 
 const environmentSchema = z.object({
   NODE_ENV: z
@@ -13,8 +12,6 @@ const environmentSchema = z.object({
   SESSION_DAYS: z.coerce.number().int().min(1).max(30).default(7),
   COOKIE_SAME_SITE: z.enum(['lax', 'strict', 'none']).default('lax'),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
-  OLLAMA_URL: z.string().default('http://127.0.0.1:11434'),
-  OLLAMA_MODEL: z.string().min(1).max(200).default('llama3.2:3b'),
   // "LifeOS AI": free cloud models with server-held keys (any subset works).
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().optional(),
@@ -65,7 +62,6 @@ export function readConfig(environment = process.env) {
     production: values.NODE_ENV === 'production',
     cookieSameSite: values.COOKIE_SAME_SITE,
     trustProxyHops: values.TRUST_PROXY_HOPS,
-    ollamaUrl: validateOllamaUrl(values.OLLAMA_URL),
     cloudAi: {
       env: {
         GROQ_API_KEY: values.GROQ_API_KEY,
@@ -77,6 +73,5 @@ export function readConfig(environment = process.env) {
       },
       dailyLimit: values.AI_DAILY_LIMIT,
     },
-    ollamaModel: values.OLLAMA_MODEL,
   };
 }

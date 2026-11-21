@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/tokens.dart';
 import 'workspace_controller.dart';
 import 'shared.dart';
 import 'utils.dart';
@@ -61,9 +62,12 @@ class _WorkoutsSpaceState extends State<WorkoutsSpace> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'Your week in motion',
-                style: TextStyle(fontWeight: FontWeight.w600, color: ink),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: context.lc.text,
+                ),
               ),
               const SizedBox(height: 14),
               Wrap(
@@ -81,7 +85,7 @@ class _WorkoutsSpaceState extends State<WorkoutsSpace> {
                       label: Text(day.substring(5)),
                       backgroundColor:
                           workouts.any((entry) => entry['date'] == day)
-                          ? const Color(0xFFE4ECDA)
+                          ? context.lc.primary.withValues(alpha: .2)
                           : null,
                     ),
                 ],
@@ -112,7 +116,7 @@ class _WorkoutsSpaceState extends State<WorkoutsSpace> {
                     Expanded(
                       child: Text(
                         '${entry['date']} · ${entry['type']}',
-                        style: const TextStyle(color: muted, fontSize: 11),
+                        style: TextStyle(color: context.lc.muted, fontSize: 11),
                       ),
                     ),
                     EntryMenu(
@@ -134,23 +138,23 @@ class _WorkoutsSpaceState extends State<WorkoutsSpace> {
                 ),
                 Text(
                   entry['title'],
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: ink,
+                    color: context.lc.text,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '${entry['duration']} min · ${entry['effort']}',
-                  style: const TextStyle(color: muted, fontSize: 12),
+                  style: TextStyle(color: context.lc.muted, fontSize: 12),
                 ),
                 if (entry['exercises'] != '') ...[
                   const SizedBox(height: 14),
                   Text(
                     entry['exercises'],
-                    style: const TextStyle(
-                      color: muted,
+                    style: TextStyle(
+                      color: context.lc.muted,
                       height: 1.8,
                       fontSize: 13,
                     ),

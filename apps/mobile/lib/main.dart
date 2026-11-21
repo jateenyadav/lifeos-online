@@ -6,73 +6,56 @@ import 'auth/token_store.dart';
 import 'config.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'theme/app_theme.dart';
+import 'theme/theme_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppConfig.loadNativeGoogleSettings();
+  final theme = ThemeController(SecurePreferenceStore());
+  await theme.load();
   final controller = AuthController(
     api: AuthApi(baseUrl: AppConfig.apiBaseUrl),
     tokenStore: SecureTokenStore(),
     google: NativeGoogleIdentity(),
   );
   controller.restoreSession();
-  runApp(LifeOsApp(controller: controller));
+  runApp(LifeOsApp(controller: controller, theme: theme));
 }
 
-class LifeOsApp extends StatelessWidget {
-  const LifeOsApp({super.key, required this.controller});
+class LifeOsApp extends StatefulWidget {
+  const LifeOsApp({super.key, required this.controller, this.theme});
   final AuthController controller;
+  final ThemeController? theme;
+  @override
+  State<LifeOsApp> createState() => _LifeOsAppState();
+}
+
+class _LifeOsAppState extends State<LifeOsApp> {
+  late final ThemeController _theme =
+      widget.theme ?? ThemeController(MemoryPreferenceStore());
+  static final _light = buildTheme(Brightness.light);
+  static final _dark = buildTheme(Brightness.dark);
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _theme,
+    builder: (context, _) => MaterialApp(
       title: 'LifeOS',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFAFBF7),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF304F40),
-          primary: const Color(0xFF304F40),
-          surface: const Color(0xFFFAFBF7),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFFFDFEFA),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-          hintStyle: const TextStyle(color: Color(0xFF697562), fontSize: 16),
-          errorMaxLines: 3,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFDFE5D8)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFDFE5D8)),
-          ),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(double.infinity, 52),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        ),
-      ),
+      theme: _light,
+      darkTheme: _dark,
+      themeMode: _theme.mode,
       home: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) => controller.account == null
-            ? LoginScreen(controller: controller)
+        animation: widget.controller,
+        builder: (context, _) => widget.controller.account == null
+            ? LoginScreen(controller: widget.controller)
             : HomeScreen(
-                key: ValueKey(controller.account!.id),
-                controller: controller,
+                key: ValueKey(widget.controller.account!.id),
+                controller: widget.controller,
+                theme: _theme,
               ),
       ),
-    );
-  }
+    ),
+  );
 }

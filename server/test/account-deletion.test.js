@@ -7,6 +7,9 @@ import { createApp } from '../src/app.js';
 import { hashToken } from '../src/auth.js';
 import { createAccountDeletion } from '../src/account-deletion.js';
 import { workspaceModels } from '../src/workspace-models.js';
+import { moneyModels } from '../src/money/store-mongo.js';
+
+const moneyNames = Object.keys(moneyModels).map((name) => `money.${name}`);
 
 let passwordHash;
 before(async () => {
@@ -22,7 +25,12 @@ function fixture({
   const token = randomBytes(32).toString('base64url');
   const secondToken = randomBytes(32).toString('base64url');
   const otherToken = randomBytes(32).toString('base64url');
-  const collections = [...Object.keys(workspaceModels), 'aiKnowledge', 'aiUsage'];
+  const collections = [
+    ...Object.keys(workspaceModels),
+    ...moneyNames,
+    'aiKnowledge',
+    'aiUsage',
+  ];
   const records = {
     users: [
       {
@@ -87,6 +95,9 @@ function fixture({
     aiUsage: models.aiUsage,
     workspaces: Object.fromEntries(
       Object.keys(workspaceModels).map((name) => [name, models[name]]),
+    ),
+    money: Object.fromEntries(
+      Object.keys(moneyModels).map((name) => [name, models[`money.${name}`]]),
     ),
     transaction: async (action) => {
       const snapshot = structuredClone(records);

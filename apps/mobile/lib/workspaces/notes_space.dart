@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/tokens.dart';
 import 'workspace_controller.dart';
 import 'shared.dart';
 import 'utils.dart';
@@ -80,7 +81,7 @@ class _NotesSpaceState extends State<NotesSpace> {
         ),
         for (final entry in visible)
           SpaceCard(
-            tone: entry['pinned'] == true ? const Color(0xFFF5F7EC) : null,
+            highlight: entry['pinned'] == true,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -89,14 +90,14 @@ class _NotesSpaceState extends State<NotesSpace> {
                     Expanded(
                       child: Text(
                         '${entry['tag']} · ${entry['kind']}',
-                        style: const TextStyle(color: muted, fontSize: 11),
+                        style: TextStyle(color: context.lc.muted, fontSize: 11),
                       ),
                     ),
                     if (entry['pinned'] == true)
-                      const Icon(
+                      Icon(
                         Icons.push_pin_outlined,
                         size: 16,
-                        color: muted,
+                        color: context.lc.muted,
                       ),
                     EntryMenu(
                       title: entry['title'],
@@ -124,7 +125,7 @@ class _NotesSpaceState extends State<NotesSpace> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: ink,
+                    color: context.lc.text,
                     decoration: entry['completed'] == true
                         ? TextDecoration.lineThrough
                         : null,
@@ -137,8 +138,8 @@ class _NotesSpaceState extends State<NotesSpace> {
                       : entry['body'],
                   maxLines: 8,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: muted,
+                  style: TextStyle(
+                    color: context.lc.muted,
                     height: 1.8,
                     fontSize: 13,
                   ),
@@ -151,7 +152,7 @@ class _NotesSpaceState extends State<NotesSpace> {
                         : (entry['dueDate'] as String).compareTo(dateKey()) < 0
                         ? 'Overdue'
                         : 'Due'} · ${entry['dueDate']}',
-                    style: const TextStyle(color: muted, fontSize: 11),
+                    style: TextStyle(color: context.lc.muted, fontSize: 11),
                   ),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -179,9 +180,9 @@ class _NotesSpaceState extends State<NotesSpace> {
             detail:
                 'Write a thought, make a reminder, or pin something important.',
           ),
-        const Text(
+        Text(
           'Reminders appear here and on Today. Device notifications are not enabled.',
-          style: TextStyle(color: muted, fontSize: 11, height: 1.8),
+          style: TextStyle(color: context.lc.muted, fontSize: 11, height: 1.8),
         ),
       ],
     );

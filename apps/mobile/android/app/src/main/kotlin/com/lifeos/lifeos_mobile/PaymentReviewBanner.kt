@@ -17,7 +17,6 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
-import java.util.Locale
 
 object PaymentReviewBanner {
     private val handler = Handler(Looper.getMainLooper())
@@ -51,7 +50,7 @@ object PaymentReviewBanner {
                     setPadding(padding, padding, padding, padding)
                     background = GradientDrawable().apply { setColor(Color.rgb(255, 254, 250)); cornerRadius = 14 * density }
                 }
-                val amount = String.format(Locale.US, "₹%.2f", payment.getLong("amountMinor") / 100.0)
+                val amount = QuickParser.formatInr(payment.getLong("amountMinor"))
                 card.addView(TextView(application).apply { text = application.getString(R.string.payment_review_title, amount, payment.optString("title")); textSize = 17f; setTextColor(Color.rgb(38, 62, 52)) })
                 card.addView(TextView(application).apply { setText(R.string.payment_review_question); setTextColor(Color.rgb(60, 80, 65)) })
                 val buttons = LinearLayout(application)
